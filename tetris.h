@@ -34,7 +34,7 @@
 #define MENU_PADDING     14 // How many columns a button or its input field should push text to the right
 
 // Appears at top of main menu
-#define MENU_TITLE        "CHOMPTRIS V1.5.2"
+#define MENU_TITLE        "CHOMPTRIS V1.5.3"
 
 // Labels for the buttons in main menu
 #define STRT_LVL_LBL      "LEVEL"
