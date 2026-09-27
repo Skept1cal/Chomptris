@@ -238,7 +238,6 @@ void readLog(Vector* log) {
     tmp = fopen(TEMP_FNM, "rb");
     if (!tmp) return;
 
-    //char* seg;
     char  seg[32]  = {0};
     char line[128] = {0};
 
@@ -274,32 +273,6 @@ void readLog(Vector* log) {
 
         vecpush(log, row);
     }
-    /*while (fgets(line, sizeof(line), tmp)) {
-        line[strcspn(line, "\r\n")] = '\0';
-
-        LogRow* row = malloc(sizeof(LogRow));
-               *row = (LogRow){0};
-        
-        if (!(seg = strtok(line, COL_SEP_STR))) row->name = strdup(DFLT_NAME);
-        else row->name        =    strdup(seg);
-
-        if (!(seg = strtok(NULL, COL_SEP_STR))) row->score = 0;
-        else row->score       = strToUInt(seg);
-
-        if (!(seg = strtok(NULL, COL_SEP_STR))) row->lines = 0;
-        else row->lines       = strToUInt(seg);
-
-        if (!(seg = strtok(NULL, COL_SEP_STR))) row->level = 0;
-        else row->level       = strToUInt(seg);
-
-        if (!(seg = strtok(NULL, COL_SEP_STR))) row->startLevel = 0;
-        else row->startLevel  = strToUInt(seg);
-
-        if (!(seg = strtok(NULL, COL_SEP_STR))) row->tetrisCount = 0;
-        else row->tetrisCount = strToUInt(seg);
-
-        vecpush(log, row);
-    }*/
 
     fclose(tmp);
     remove(TEMP_FNM);
