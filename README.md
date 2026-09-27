@@ -7,6 +7,12 @@ in terms of mechanics, mainly.
 
 You can either compile the game or download executables from the releases.
 
+If you want to use the Makefile:
+```bash
+make stable
+```
+*Note: This may only run partially if you do not have the mingw32 C compiler installed, as the Makefile compiles for both platforms.*
+
 ### Help
 
 All mechanics, controls and things related to how the game works are detailed within the game's help text.
