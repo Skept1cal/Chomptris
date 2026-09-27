@@ -151,8 +151,6 @@ void writeLog(Vector* log) {
     for (int i = 0, keyPos = 0; i < log->len; i++) {
         LogRow* row = log->arr[i];
 
-        (void)keyPos;
-
         snprintf(
             rowBuff,
             sizeof(rowBuff),
