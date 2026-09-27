@@ -837,7 +837,8 @@ static inline void flushstdin(uint8_t* c) {
 #else
     BOOL WINAPI HandlerRoutine(DWORD dwCtrlType) {
         resetterm();
-        if (GenerateConsoleCtrlEvent(dwCtrlType, 0) == 0) abort();
+        if (GenerateConsoleCtrlEvent(dwCtrlType, 0) == 0) return FALSE;
+        else return TRUE;
     }
 
     void setWinHandler() {
