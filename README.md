@@ -11,3 +11,7 @@ You can either compile the game or download executables from the releases.
 
 All mechanics, controls and things related to how the game works are detailed within the game's help text.
 To open it, press CTRL+H after launch.
+
+## Other information
+
+- For releases before v1.5.2, please check out a repository maintained by one of my friends <a href="https://github.com/Coltcpu/Chomptris">here</a>.
