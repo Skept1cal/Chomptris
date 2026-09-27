@@ -33,7 +33,7 @@ static const uint8_t XOR_KEY[] = {
 
 static void freeLogRow(void *logRow);
 
-static uint32_t strToUInt(const char *str);
+static uint64_t strToUInt(const char *str);
 
 static void deepcopyRow(LogRow* restrict to, const LogRow* restrict from);
 
@@ -48,8 +48,8 @@ static void freeLogRow(void* logRow) {
 
 
 
-static uint32_t strToUInt(const char* str) {
-    uint32_t num = 0;
+static uint64_t strToUInt(const char* str) {
+    uint64_t num = 0;
     uint8_t  len = strlen(str);
 
     for (int i = 0; i < len && str[i] != '.'; i++) {
