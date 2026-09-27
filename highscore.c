@@ -57,7 +57,7 @@ static uint32_t strToUInt(const char* str) {
         if ( i == 0 && (str[i] == '+' || str[i] == '-') ) continue;
         else if (str[i] < '0' || str[i] > '9') break;
 
-        num += (str[i] - '0') * pow(10, len-1 - i);
+        num = num * 10 + str[i] - '0';
     }
 
     return num;

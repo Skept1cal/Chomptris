@@ -1877,22 +1877,18 @@ void removeCharFromInput(Player* player) {
     renderMenu(player);
 }
 
-
-
 uint32_t uint8VecToInt(Vector* vec) {
     uint32_t num = 0;
     for (int i = 0; i < vec->len; i++) {
-        num += *(uint8_t*)vec->arr[i] * pow(10, vec->len-1 - i);
+        num = num * 10 + *(uint8_t*)vec->arr[i];
     }
     return num;
 }
 
 void capUint8Vec(Vector* vec, uint8_t cap) {
-    for (int i = 0; i < vec->len; i++) {
-        uint8_t exp = pow(10, vec->len-1 - i);        
-
-        *(uint8_t*)vec->arr[i] = cap / exp;
-        cap -= (cap / exp) * exp; // 'cap' is an integer so this will remove 10 to the power of the current place in the number, e.g., 255 - 200
+    for (int i = vec->len - 1; i >= 0; i--) {
+        *(uint8_t*)vec->arr[i] = cap % 10;
+        cap /= 10;
     }
 }
 
