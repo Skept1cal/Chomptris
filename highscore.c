@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 
 
@@ -15,6 +16,8 @@
 #define LEVEL_WIDTH    3 // How many digits the level must take up
 #define STRT_LVL_WIDTH 3 // How many digits the starting level must take up
 #define TETR_CNT_WIDTH 5 // How many digits the number of tetrises must take up
+
+#define LINE_NUM_PAD   7 // How many columns the line numbering when exporting and printing the logs must shift the rest of the row
 
 
 
@@ -110,7 +113,12 @@ void writeLog(Vector* log) {
     // to prevent potential losses.
 
     FILE* tmp = fopen(     TEMP_FNM, "wb");
-    FILE* f   = fopen(INTRN_LOG_FNM, "rb");
+
+    FILE*   f = fopen(INTRN_LOG_FNM, "rb");
+    if (!f) f = fopen(INTRN_LOG_FNM, "wb");
+    if (!f) return;
+    fclose(f);
+    f = fopen(INTRN_LOG_FNM, "rb");
 
     if (!tmp || !f) {
         if (tmp) {
@@ -176,10 +184,13 @@ void exportLog(Vector* log) {
     for (int i = 0; i < log->len; i++) {
         LogRow* row = log->arr[i];
 
+        uint8_t padding = LINE_NUM_PAD - (uint8_t)log10(i + 1);
+
         fprintf(
             f,
-            "%i.   Name: %*s; Score: %0*lu; Lines: %0*i; Level: %0*i; Starting level: %0*i; Tetrises: %0*i%s",
+            "%i.%*sName: %*s; Score: %0*lu; Lines: %0*i; Level: %0*i; Starting level: %0*i; Tetrises: %0*i%s",
             i + 1,
+            padding, "",
             MAX_NME_INPUT_LEN, row->name,
                   SCORE_WIDTH, row->score,
                   LINES_WIDTH, row->lines,
@@ -319,15 +330,19 @@ void printLog(Vector* log) {
     for (int i = 0; i < log->len; i++) {
         LogRow* row = log->arr[i];
 
+        uint8_t padding = LINE_NUM_PAD - (uint8_t)log10(i + 1);
+
         printf(
-            "%i.\x1b[3CName: %*s; Score: %0*lu; Lines: %0*i; Level: %0*i; Starting level: %0*i; Tetrises: %0*i\r\n",
+            "%i.%*sName: %*s; Score: %0*lu; Lines: %0*i; Level: %0*i; Starting level: %0*i; Tetrises: %0*i%s",
             i + 1,
+            padding, "",
             MAX_NME_INPUT_LEN, row->name,
                   SCORE_WIDTH, row->score,
                   LINES_WIDTH, row->lines,
                   LEVEL_WIDTH, row->level,
                STRT_LVL_WIDTH, row->startLevel,
-               TETR_CNT_WIDTH, row->tetrisCount
+               TETR_CNT_WIDTH, row->tetrisCount,
+            (i < log->len - 1) ? "\r\n" : ""
         );
     }
 
