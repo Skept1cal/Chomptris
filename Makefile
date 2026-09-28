@@ -1,5 +1,5 @@
 clear:
-	rm -rf tetris.exe tetris.elf
+	rm -rf tetris.exe tetris.elf highscores.txt hs.txt
 
 src:
 	gcc tetris.c vector/vector.c highscore.c -o tetris.elf -g -Wall -Wno-unused-function -Wno-format

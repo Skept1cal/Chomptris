@@ -7,7 +7,7 @@
 
 
 
-const uint8_t PIECE_SHAPES[PIECE_Z + 1][SHP_MATR_SZ][SHP_MATR_SZ] = {
+const uint8_t PIECE_SHAPES[][SHP_MATR_SZ][SHP_MATR_SZ] = {
     [PIECE_NULL]={
         {0, 0, 0, 0},
         {0, 0, 0, 0},
@@ -62,7 +62,7 @@ const uint8_t PIECE_SHAPES[PIECE_Z + 1][SHP_MATR_SZ][SHP_MATR_SZ] = {
     struct termios orgterm;
 #endif
 
-const Pos WALL_KICKS[6] = {
+const Pos WALL_KICKS[] = {
     (Pos){.x =  1, .y =  0},
     (Pos){.x = -1, .y =  0},
     (Pos){.x =  2, .y =  0},
