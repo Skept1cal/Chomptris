@@ -109,13 +109,9 @@ void writeLog(Vector* log) {
     // then overwrite the original file with new data,
     // to prevent potential losses.
 
-    FILE* f = fopen(INTRN_LOG_FNM, "rb");
+    FILE* f = fopen(INTRN_LOG_FNM, "wb");
 
-    if (!f) {
-        f = fopen(INTRN_LOG_FNM, "wb");
-        fclose(f);
-        return;
-    }
+    if (!f) return;
 
     FILE* tmp = fopen(TEMP_FNM, "wb");
     f = fopen(INTRN_LOG_FNM, "rb");
