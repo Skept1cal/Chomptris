@@ -158,10 +158,10 @@ int main(int argc, char** argv) {
                     if (!player.paused && !player.helpTextOpen && !player.logOpen && c == 0xe0) {
                         c = _getch();
                         switch (c) {
-                            case 72:    upPressed(&player, ARENA); break;             // A
-                            case 80:  downPressed(&player, ARENA); break;             // B
-                            case 77: rightPressed(&player, ARENA); break;             // C
-                            case 75:  leftPressed(&player, ARENA); break;             // D
+                            case 72:    upPressed(&player, ARENA); break;             // H
+                            case 80:  downPressed(&player, ARENA); break;             // P
+                            case 77: rightPressed(&player, ARENA); break;             // M
+                            case 75:  leftPressed(&player, ARENA); break;             // K
                         }
                     } else {
                         switch (c) {
