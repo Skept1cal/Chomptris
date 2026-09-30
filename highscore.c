@@ -38,7 +38,11 @@ static void freeLogRow(void *logRow);
 
 static uint64_t strToUInt(const char *str);
 
-static void deepcopyRow(LogRow* restrict to, const LogRow* restrict from);
+static void tokenizeLine(char* restrict seg, size_t segSize, const char* restrict line, int* linePos);
+
+static void formatLogRow(char* to, size_t toSize, Vector* log, int ind);
+
+static void xorStr(char* str, int* keyPos);
 
 
 
@@ -67,19 +71,6 @@ static uint64_t strToUInt(const char* str) {
 
 
 
-static void deepcopyRow(LogRow* restrict to, const LogRow* restrict from) {
-    *to = (LogRow){
-        .name        = strdup(from->name),
-        .score       = from->score,
-        .lines       = from->lines,
-        .level       = from->level,
-        .startLevel  = from->startLevel,
-        .tetrisCount = from->tetrisCount
-    };
-}
-
-
-
 static void tokenizeLine(char* restrict seg, size_t segSize, const char* restrict line, int* linePos) {
     int segPos = 0;
     for (
@@ -96,6 +87,38 @@ static void tokenizeLine(char* restrict seg, size_t segSize, const char* restric
     seg[segPos] = '\0';
 
     (*linePos)++; // Must shift the index forward to skip the delimiter
+}
+
+
+
+static void formatLogRow(char* to, size_t toSize, Vector* log, int ind) {
+    LogRow* row = log->arr[ind];
+
+    uint8_t padding = LINE_NUM_PAD - (uint8_t)log10(ind + 1);
+
+    snprintf(
+        to,
+        toSize,
+        "%i.%*sName: %*s; Score: %0*lu; Lines: %0*i; Level: %0*i; Starting level: %0*i; Tetrises: %0*i%s",
+        ind + 1,
+        padding, "",
+        MAX_NME_INPUT_LEN, row->name,
+              SCORE_WIDTH, row->score,
+              LINES_WIDTH, row->lines,
+              LEVEL_WIDTH, row->level,
+           STRT_LVL_WIDTH, row->startLevel,
+           TETR_CNT_WIDTH, row->tetrisCount,
+        (ind < log->len - 1) ? "\r\n" : ""
+    );
+}
+
+
+
+static void xorStr(char* str, int* keyPos) {
+    for (int i = 0; str[i] != '\0'; i++) {
+        str[i] ^= XOR_KEY[(*keyPos)++];
+        if (*keyPos == sizeof(XOR_KEY) / sizeof(*XOR_KEY)) *keyPos = 0;
+    }
 }
 
 
@@ -165,10 +188,7 @@ void writeLog(Vector* log) {
 
         size_t len = strlen(rowBuff);
 
-        for (int j = 0; rowBuff[j] != '\0'; j++) {
-            rowBuff[j] ^= XOR_KEY[keyPos++];
-            if (keyPos == sizeof(XOR_KEY) / sizeof(*XOR_KEY)) keyPos = 0;
-        }
+        xorStr(rowBuff, &keyPos);
 
         fwrite(rowBuff, sizeof(*rowBuff), len, f);
     }
@@ -182,23 +202,11 @@ void exportLog(Vector* log) {
     if (!f) return;
 
     for (int i = 0; i < log->len; i++) {
-        LogRow* row = log->arr[i];
+        size_t alloc = 256 * sizeof(char);
+        char*  to    = malloc(alloc);
 
-        uint8_t padding = LINE_NUM_PAD - (uint8_t)log10(i + 1);
-
-        fprintf(
-            f,
-            "%i.%*sName: %*s; Score: %0*lu; Lines: %0*i; Level: %0*i; Starting level: %0*i; Tetrises: %0*i%s",
-            i + 1,
-            padding, "",
-            MAX_NME_INPUT_LEN, row->name,
-                  SCORE_WIDTH, row->score,
-                  LINES_WIDTH, row->lines,
-                  LEVEL_WIDTH, row->level,
-               STRT_LVL_WIDTH, row->startLevel,
-               TETR_CNT_WIDTH, row->tetrisCount,
-            (i < log->len - 1) ? "\r\n" : ""
-        );
+        formatLogRow(to, alloc, log, i);
+        fputs(to, f);
     }
 
     fclose(f);
@@ -220,10 +228,8 @@ void readLog(Vector* log) {
     uint8_t txt[bytes];
 
     fread(txt, sizeof(*txt), bytes, f);
-    for (int i = 0, keyPos = 0; i < bytes; i++) {
-        txt[i] ^= XOR_KEY[keyPos++];
-        if (keyPos == sizeof(XOR_KEY) / sizeof(*XOR_KEY)) keyPos = 0;
-    }
+    int keyPos = 0;
+    xorStr((char*)txt, &keyPos);
 
     fclose(f);
 
@@ -280,22 +286,19 @@ void readLog(Vector* log) {
 
 
 
-void sortLogVec(Vector** log, SORT_TYPES sortType) {
-    Vector* sorted = initLog();
+void sortLogVec(Vector* log, SORT_TYPES sortType) {
+    for (int i = 0; i < log->len; i++) {
+        if (!log->arr[i]) continue;
 
-    while ((*log)->len > 0) {
-        LogRow* highest = malloc(sizeof(LogRow));
-               *highest = (LogRow){0};
-
-        uint32_t highestInd = 0;
-        
-        for (int i = 0; i < (*log)->len; i++) {
-            if (!(*log)->arr[i]) continue;
+        LogRow* highest = log->arr[i];
+        uint32_t highestInd = i;
+        for (int j = i; j < log->len; j++) {
+            if (!log->arr[j]) continue;
 
             uint64_t currVal;
             uint64_t compVal;
 
-            LogRow* currRow = (*log)->arr[i];
+            LogRow* currRow = log->arr[j];
 
             switch (sortType) {
                 case SRT_TYPE_SCORE:   currVal = currRow->score;       compVal = highest->score;       break;
@@ -306,20 +309,15 @@ void sortLogVec(Vector** log, SORT_TYPES sortType) {
             }
 
             if (currVal >= compVal) {
-                // We must free the name because 'highest' can be copied to multiple times and we'd leave behind the previously
-                // duplicated name pointers, causing a leak
-                free((void*)highest->name);
-                deepcopyRow(highest, currRow);
-                highestInd = i;
+                highest = currRow;
+                highestInd = j;
             }
         }
 
-        vecpush(sorted, highest);
-        vecrmv(*log, highestInd);
+        LogRow* temp = log->arr[i];
+        log->arr[i] = highest;
+        log->arr[highestInd] = temp;
     }
-
-    freevec(*log);
-    *log = sorted;
 }
 
 
@@ -328,22 +326,11 @@ void printLog(Vector* log) {
     clearterm();
 
     for (int i = 0; i < log->len; i++) {
-        LogRow* row = log->arr[i];
+        size_t alloc = 256 * sizeof(char);
+        char*  to    = malloc(alloc);
 
-        uint8_t padding = LINE_NUM_PAD - (uint8_t)log10(i + 1);
-
-        printf(
-            "%i.%*sName: %*s; Score: %0*lu; Lines: %0*i; Level: %0*i; Starting level: %0*i; Tetrises: %0*i%s",
-            i + 1,
-            padding, "",
-            MAX_NME_INPUT_LEN, row->name,
-                  SCORE_WIDTH, row->score,
-                  LINES_WIDTH, row->lines,
-                  LEVEL_WIDTH, row->level,
-               STRT_LVL_WIDTH, row->startLevel,
-               TETR_CNT_WIDTH, row->tetrisCount,
-            (i < log->len - 1) ? "\r\n" : ""
-        );
+        formatLogRow(to, alloc, log, i);
+        fputs(to, stdout);
     }
 
     fflush(stdout);

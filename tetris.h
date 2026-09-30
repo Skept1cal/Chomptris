@@ -3,7 +3,6 @@
 
 #define ARENA_ROWS       20 // Height
 #define ARENA_COLS       10 // Width
-#define SHP_MATR_SZ       4 // Size of the N*N matrices representing each shape/tetromino
 
 #define BOUND_STR      "##" // String to draw at the bounds of the board
 #define EMPTY_STR      "  " // String to draw in place of empty fields in arena
@@ -34,7 +33,7 @@
 #define MENU_PADDING     14 // How many columns a button or its input field should push text to the right
 
 // Appears at top of main menu
-#define VERSION_STR       "V1.5.7"
+#define VERSION_STR       "V1.6.0"
 #define MENU_TITLE        ("CHOMPTRIS " VERSION_STR)
 
 // Labels for the buttons in main menu
@@ -124,9 +123,18 @@ typedef enum {
     TEXT_MRKR       // Thöugh not used within the arena, this tells writeField() to write characters from text
 } MARKERS;
 
+typedef enum {
+    MATR_SZ_TWO = 2,
+    MATR_SZ_THREE,
+    MATR_SZ_FOUR,
+} SHP_MATR_SZS;
+
 typedef struct {
     Pos     pos; // X/Y positions relative to top-left corner of the piece
-    uint8_t shape[SHP_MATR_SZ][SHP_MATR_SZ]; // A 2D array/matrix of unsigned 8-bit ints representing the shape of the piece
+    uint8_t shape4[4][4];
+    uint8_t shape3[3][3];
+    uint8_t shape2[2][2];
+    SHP_MATR_SZS MATR_SZ;
     SHAPES  type;
     MARKERS color;
 } Piece;
@@ -235,6 +243,8 @@ typedef struct {
 #define MIN(n1, n2) (n1 < n2 ? n1 : n2)
 #define MAX(n1, n2) (n1 > n2 ? n1 : n2)
 
+static inline void readInput(Player* player, Vector* ARENA, uint8_t* c);
+
 static inline bool strmtch(const char* str1, const char* str2);
 static inline void writeField(char** buff, MARKERS marker, const char* str);
 
@@ -245,7 +255,12 @@ static inline uint64_t pieceFreezeFormula();
 static inline uint64_t lineClearFormula(double lines, uint8_t currLevel);
 static inline uint64_t levelUpFormula(uint8_t levels);
 
-void suspend(struct timespec* timeout);
+static inline uint8_t getGlobalShapeField(SHP_MATR_SZS MATR_SZ, int p, int i, int j);
+static inline void setPieceShapeField(Piece* p, int i, int j, int field);
+static inline uint8_t getPieceShapeField(Piece* p, int i, int j);
+static inline SHP_MATR_SZS requiredPieceMatrixSize(Piece* p);
+
+static inline void suspend(struct timespec* timeout);
 
 static inline Pos FPOStoAPOS(Piece* p, int row, int col);
 static inline Pos APOStoFPOS(Piece* p, int row, int col);

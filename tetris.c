@@ -7,7 +7,7 @@
 
 
 
-const uint8_t PIECE_SHAPES[][SHP_MATR_SZ][SHP_MATR_SZ] = {
+const uint8_t PIECE_SHAPES4[][4][4] = {
     [PIECE_NULL]={
         {0, 0, 0, 0},
         {0, 0, 0, 0},
@@ -19,42 +19,50 @@ const uint8_t PIECE_SHAPES[][SHP_MATR_SZ][SHP_MATR_SZ] = {
         {0, 0, 1, 0},
         {0, 0, 1, 0},
         {0, 0, 1, 0}
-    },
-    [PIECE_O]={
-        {0, 0, 0, 0},
-        {0, 1, 1, 0},
-        {0, 1, 1, 0},
-        {0, 0, 0, 0}
+    }
+};
+
+const uint8_t PIECE_SHAPES3[][3][3] = {
+    [PIECE_NULL]={
+        {0, 0, 0},
+        {0, 0, 0},
+        {0, 0, 0}
     },
     [PIECE_T]={
-        {0, 1, 0, 0},
-        {0, 1, 1, 0},
-        {0, 1, 0, 0},
-        {0, 0, 0, 0}
+        {0, 1, 0},
+        {0, 1, 1},
+        {0, 1, 0},
     },
     [PIECE_J]={
-        {0, 0, 1, 0},
-        {0, 0, 1, 0},
-        {0, 1, 1, 0},
-        {0, 0, 0, 0}
+        {0, 1, 0},
+        {0, 1, 0},
+        {1, 1, 0},
     },
     [PIECE_L]={
-        {0, 1, 0, 0},
-        {0, 1, 0, 0},
-        {0, 1, 1, 0},
-        {0, 0, 0, 0}
+        {0, 1, 0},
+        {0, 1, 0},
+        {0, 1, 1},
     },
     [PIECE_S]={
-        {0, 1, 0, 0},
-        {0, 1, 1, 0},
-        {0, 0, 1, 0},
-        {0, 0, 0, 0}
+        {0, 1, 0},
+        {0, 1, 1},
+        {0, 0, 1},
     },
     [PIECE_Z]={
-        {0, 0, 1, 0},
-        {0, 1, 1, 0},
-        {0, 1, 0, 0},
-        {0, 0, 0, 0}
+        {0, 0, 1},
+        {0, 1, 1},
+        {0, 1, 0},
+    }
+};
+
+const uint8_t PIECE_SHAPES2[][2][2] = {
+    [PIECE_NULL]={
+        {0, 0},
+        {0, 0}
+    },
+    [PIECE_O]={
+        {1, 1},
+        {1, 1}
     }
 };
 
@@ -134,6 +142,16 @@ int main(int argc, char** argv) {
             .tv_sec  = 0,
             .tv_nsec = (int)(ANIMATION_TIMEOUT * 1e8)
         };
+        #ifdef _WIN32
+            LARGE_INTEGER freq;
+            QueryPerformanceFrequency(&freq);
+            LARGE_INTEGER start;
+            LARGE_INTEGER end;
+        #else
+            clock_t start;
+            clock_t end;
+        #endif
+        double  diff;
 
         uint8_t c;
 
@@ -147,160 +165,18 @@ int main(int argc, char** argv) {
         goToMenu(&player, ARENA);
 
         while (true) {
+            #ifdef _WIN32
+                QueryPerformanceCounter(&start);
+            #else
+                start = clock();
+            #endif
+
             if (player.quit) {
                 quit(&player, ARENA);
                 goto quit;
             }
 
-            #ifdef _WIN32
-                if (_kbhit()) {
-                    c = _getch();
-                    if (!player.paused && !player.helpTextOpen && !player.logOpen && c == 0xe0) {
-                        c = _getch();
-                        switch (c) {
-                            case 72:    upPressed(&player, ARENA); break;             // H
-                            case 80:  downPressed(&player, ARENA); break;             // P
-                            case 77: rightPressed(&player, ARENA); break;             // M
-                            case 75:  leftPressed(&player, ARENA); break;             // K
-                        }
-                    } else {
-                        switch (c) {
-                            case  1: clearterm(); break;                              // ^A
-                            case 17: player.quit = true; break;                       // ^Q
-                            case 18: {                                                // ^R
-                                if (!player.mainMenuOpen) {
-                                    reset(&player, ARENA);
-                                }
-                                break;
-                            }
-                            case  8: {                                                // ^H
-                                if (!player.gameOver) {
-                                    toggleHelp(&player, ARENA);
-                                }
-                                break;
-                            }
-                            case 32: {                                                // SPACE
-                                if (!player.helpTextOpen && !player.mainMenuOpen) {
-                                    togglePause(&player);
-                                }
-                                break;
-                            }
-                            case 13: {                                                // ^M/ENTER
-                                if (player.mainMenuOpen && !player.helpTextOpen && !player.logOpen) {
-                                    selectBtn(&player);
-                                }
-                                break;
-                            }
-                            case 27: {                                                // ESC
-                                goToMenu(&player, ARENA);
-                                break;
-                            }
-                        }
-
-                        if (!player.paused && !player.helpTextOpen && !player.mainMenuOpen) {
-                            c = tolower(c);
-                            switch (c) {
-                                case 119:                                             // w/W
-                                case 109:                                             // m/M
-                                case 120: rotateCW(&player.currPiece, ARENA); break;  // x/X
-                                case 110:                                             // n/N
-                                case 121:                                             // y/Y
-                                case 122: rotateCCW(&player.currPiece, ARENA); break; // z/Z
-
-                                case  98:                                             // b/B
-                                case  99: swapHeldPiece(&player); break;              // c/C
-
-                                case 115:  downPressed(&player, ARENA); break;        // s/S
-                                case 100: rightPressed(&player, ARENA); break;        // d/D
-                                case  97:  leftPressed(&player, ARENA); break;        // a/A
-                            }
-                        }
-
-                        if (player.mainMenuOpen && !player.helpTextOpen && !player.logOpen) {
-                            if (player.buttons[player.selected].valueType == BVTYPE_CHAR) {
-                                if (c >= 32 && c <= 126) writeCharToInput(&player, c);
-                                else if (c == 127 || c == 4) removeCharFromInput(&player); // DEL/^D
-                            } else if (player.buttons[player.selected].valueType == BVTYPE_NUM) {
-                                if (c >= 48 && c <= 57) writeNumToInput(&player, c - '0');
-                            }
-                        }
-                    }
-                }
-            #else
-                if (read(STDIN_FILENO, &c, 1) == 1) {
-                    if (c == '\x1b') {
-                        if (!player.paused && !player.helpTextOpen && !player.logOpen && read(STDIN_FILENO, &c, 1) == 1 && read(STDIN_FILENO, &c, 1) == 1) {
-                            switch (c) {
-                                case 65:    upPressed(&player, ARENA); break;         // A
-                                case 66:  downPressed(&player, ARENA); break;         // B
-                                case 67: rightPressed(&player, ARENA); break;         // C
-                                case 68:  leftPressed(&player, ARENA); break;         // D
-                            }
-                        } else if (read(STDIN_FILENO, &c, 1) == 0) {                  // Checks whether ESC was actually pressed and not something beginning with ESC
-                            goToMenu(&player, ARENA);
-                        }
-                    } else {
-                        switch (c) {
-                            case  1: clearterm(); break;                              // ^A
-                            case 17: player.quit = true; break;                       // ^Q
-                            case 18: {                                                // ^R
-                                if (!player.mainMenuOpen) {
-                                    reset(&player, ARENA);
-                                }
-                                break;
-                            }
-                            case  8: {                                                // ^H
-                                if (!player.gameOver && !player.logOpen) {
-                                    toggleHelp(&player, ARENA);
-                                }
-                                break;
-                            }
-                            case 32: {                                                // SPACE
-                                if (!player.helpTextOpen && !player.mainMenuOpen) {
-                                    togglePause(&player);
-                                }
-                                break;
-                            }
-                            case 13: {                                                // ^M/ENTER
-                                if (player.mainMenuOpen && !player.helpTextOpen && !player.logOpen) {
-                                    selectBtn(&player);
-                                    flushstdin(&c);
-                                }
-                                break;
-                            }
-                        }
-
-                        if (!player.paused && !player.helpTextOpen && !player.mainMenuOpen) {
-                            c = tolower(c);
-                            switch (c) {
-                                case 110:                                             // n/N
-                                case 119:                                             // w/W
-                                case 120: rotateCW(&player.currPiece, ARENA); break;  // x/X
-
-                                case  98:                                             // b/B
-                                case 121:                                             // y/Y
-                                case 122: rotateCCW(&player.currPiece, ARENA); break; // z/Z
-
-                                case 109:                                             // m/M
-                                case  99: swapHeldPiece(&player); break;              // c/C
-
-                                case 115:  downPressed(&player, ARENA); break;        // s/S
-                                case 100: rightPressed(&player, ARENA); break;        // d/D
-                                case  97:  leftPressed(&player, ARENA); break;        // a/A
-                            }
-                        }
-
-                        if (player.mainMenuOpen && !player.helpTextOpen && !player.logOpen) {
-                            if (player.buttons[player.selected].valueType == BVTYPE_CHAR) {
-                                if (c >= 32 && c <= 126) writeCharToInput(&player, c);
-                                else if (c == 127 || c == 4) removeCharFromInput(&player); // DEL/^D
-                            } else if (player.buttons[player.selected].valueType == BVTYPE_NUM) {
-                                if (c >= 48 && c <= 57) writeNumToInput(&player, c - '0');
-                            }
-                        }
-                    }
-                }
-            #endif
+            readInput(&player, ARENA, &c);
 
             if (player.mainMenuOpen && !player.helpTextOpen) {
                 executeSelected(&player);
@@ -386,7 +262,20 @@ int main(int argc, char** argv) {
                 if (!player.gameOver) renderGame(&player, ARENA);
             }
 
+            #ifdef _WIN32
+                QueryPerformanceCounter(&end);
+                diff = 1000.0 * (end.QuadPart - start.QuadPart) / freq.QuadPart;
+            #else
+                end  = clock();
+                diff = 1000.0 * (end - start) / CLOCKS_PER_SEC; // We only end up suspending for as long as there is left from the ~16.67ms window.
+            #endif
+
+            long tempNsec = framerate.tv_nsec; // We'll need to reset the framerate after suspension to always compensate for the target itself
+            framerate.tv_nsec -= diff * 1e6; // Convert ms to ns
+
             suspend(&framerate);
+
+            framerate.tv_nsec = tempNsec;
         }
 
     } else if (argc == 2) {
@@ -422,6 +311,105 @@ int main(int argc, char** argv) {
 
     exitsuccess: return 0;
     exitfailure: return 1;
+}
+
+
+
+static inline void readInput(Player* player, Vector* ARENA, uint8_t* c) {
+    #ifdef _WIN32
+        if (!_kbhit()) return;
+    #else
+        if (read(STDIN_FILENO, c, 1) == 0) return;
+    #endif
+
+    #ifdef _WIN32
+        *c = _getch();
+        if (!player->paused && !player->helpTextOpen && !player->logOpen && *c == 0xe0) {
+            *c = _getch();
+            switch (*c) {
+                case 72:    upPressed(player, ARENA); return;             // H
+                case 80:  downPressed(player, ARENA); return;             // P
+                case 77: rightPressed(player, ARENA); return;             // M
+                case 75:  leftPressed(player, ARENA); return;             // K
+            }
+        } else if (*c == 27) {                                            // ESC
+            goToMenu(player, ARENA);
+            return;
+        }
+    #else
+        if (*c == '\x1b') {
+            if (!player->paused && !player->helpTextOpen && !player->logOpen && read(STDIN_FILENO, c, 1) == 1 && read(STDIN_FILENO, c, 1) == 1) {
+                switch (*c) {
+                    case 65:    upPressed(player, ARENA); return;         // A
+                    case 66:  downPressed(player, ARENA); return;         // B
+                    case 67: rightPressed(player, ARENA); return;         // C
+                    case 68:  leftPressed(player, ARENA); return;         // D
+                }
+            } else if (read(STDIN_FILENO, c, 1) == 0) {                   // Checks whether ESC was actually pressed and not something beginning with ESC
+                goToMenu(player, ARENA);
+                return;
+            }
+        }
+    #endif
+
+    switch (*c) {
+        case  1: clearterm(); return;                               // ^A
+        case 17: player->quit = true; return;                       // ^Q
+        case 18: {                                                  // ^R
+            if (!player->mainMenuOpen) {
+                reset(player, ARENA);
+            }
+            return;
+        }
+        case  8: {                                                  // ^H
+            if (!player->gameOver && !player->logOpen) {
+                toggleHelp(player, ARENA);
+            }
+            return;
+        }
+        case 32: {                                                  // SPACE
+            if (!player->helpTextOpen && !player->mainMenuOpen) {
+                togglePause(player);
+            }
+            return;
+        }
+        case 13: {                                                  // ^M/ENTER
+            if (player->mainMenuOpen && !player->helpTextOpen && !player->logOpen) {
+                selectBtn(player);
+                flushstdin(c);
+            }
+            return;
+        }
+    }
+
+    if (!player->paused && !player->helpTextOpen && !player->mainMenuOpen) {
+        *c = tolower(*c);
+        switch (*c) {
+            case 110:                                               // n/N
+            case 119:                                               // w/W
+            case 120: rotateCW(&player->currPiece, ARENA); return;  // x/X
+
+            case  98:                                               // b/B
+            case 121:                                               // y/Y
+            case 122: rotateCCW(&player->currPiece, ARENA); return; // z/Z
+
+            case 109:                                               // m/M
+            case  99: swapHeldPiece(player); return;                // c/C
+
+            case 115:  downPressed(player, ARENA); return;          // s/S
+            case 100: rightPressed(player, ARENA); return;          // d/D
+            case  97:  leftPressed(player, ARENA); return;          // a/A
+        }
+    }
+
+    if (player->mainMenuOpen && !player->helpTextOpen && !player->logOpen) {
+        if (player->buttons[player->selected].valueType == BVTYPE_CHAR) {
+            if (*c >= 32 && *c <= 126) writeCharToInput(player, *c);
+            else if (*c == 127 || *c == 4) removeCharFromInput(player); // DEL and ^D
+        } else if (player->buttons[player->selected].valueType == BVTYPE_NUM) {
+            if (*c >= 48 && *c <= 57) writeNumToInput(player, *c - '0');
+        }
+    }
 }
 
 
@@ -532,13 +520,51 @@ static inline uint64_t pieceFreezeFormula() {
 static inline uint64_t lineClearFormula(double lines, uint8_t currLevel) {
     return lines * lines * 100 * (1.0 + 0.075 * currLevel);
 }
+
 static inline uint64_t levelUpFormula(uint8_t levels) {
     return 200 * levels;
 }
 
 
 
-void suspend(struct timespec* timeout) {
+static inline uint8_t getGlobalShapeField(SHP_MATR_SZS MATR_SZ, int pInd, int i, int j) {
+    switch (MATR_SZ) {
+        case MATR_SZ_FOUR:  return PIECE_SHAPES4[pInd][i][j];
+        case MATR_SZ_THREE: return PIECE_SHAPES3[pInd][i][j];
+        case MATR_SZ_TWO:   return PIECE_SHAPES2[pInd][i][j];
+        default:            return 0;
+    }
+}
+
+static inline void setPieceShapeField(Piece* p, int i, int j, int field) {
+    switch (p->MATR_SZ) {
+        case MATR_SZ_FOUR:  p->shape4[i][j] = field; break;
+        case MATR_SZ_THREE: p->shape3[i][j] = field; break;
+        case MATR_SZ_TWO:   p->shape2[i][j] = field; break;
+    }
+}
+
+static inline uint8_t getPieceShapeField(Piece* p, int i, int j) {
+    switch (p->MATR_SZ) {
+        case MATR_SZ_FOUR:  return p->shape4[i][j];
+        case MATR_SZ_THREE: return p->shape3[i][j];
+        case MATR_SZ_TWO:   return p->shape2[i][j];
+        default:            return 0;
+    }
+}
+
+static inline SHP_MATR_SZS requiredPieceMatrixSize(Piece* p) {
+    switch (p->type) {
+        case PIECE_NULL:
+        case PIECE_I: return MATR_SZ_FOUR;
+        case PIECE_O: return MATR_SZ_TWO;
+        default:      return MATR_SZ_THREE;
+    }
+}
+
+
+
+static inline void suspend(struct timespec* timeout) {
     #ifdef _WIN32
         HANDLE hTimer;
         if (!(hTimer = CreateWaitableTimerW(NULL, FALSE, NULL))) abort();
@@ -572,13 +598,11 @@ static inline Pos APOStoFPOS(Piece* p, int row, int col) {
 }
 
 bool APOSinpiece(Piece* p, Pos apos) {
-    Pos fieldAPOS;
+    for (int i = 0; i < p->MATR_SZ; i++) {
+        for (int j = 0; j < p->MATR_SZ; j++) {
+            if (!getPieceShapeField(p, i, j)) continue;
 
-    for (int i = 0; i < SHP_MATR_SZ; i++) {
-        for (int j = 0; j < SHP_MATR_SZ; j++) {
-            if (!p->shape[i][j]) continue;
-
-            fieldAPOS = FPOStoAPOS(p, i, j);
+            Pos fieldAPOS = FPOStoAPOS(p, i, j);
             if (fieldAPOS.x == apos.x && fieldAPOS.y == apos.y) return true;
         }
     }
@@ -896,27 +920,19 @@ void initPlayer(Player* player) {
 
     player->paused            = false;
 
-    for (int i = 0; i < SHP_MATR_SZ; i++) {
-        for (int j = 0; j < SHP_MATR_SZ; j++) {
-            player->heldPiece.shape[i][j] = PIECE_SHAPES[PIECE_NULL][i][j];
-        }
-    }
+    player->heldPiece         = createPiece();
 
-    player->heldPiece.pos    = (Pos){.x = 0, .y = 0};
-    player->heldPiece.color  = EMPTY_MRKR;
-    player->heldPiece.type   = PIECE_NULL;
+    player->swappedThisRound  = false;
 
-    player->swappedThisRound = false;
+    player->currToBeFrozen    = false;
+    player->lockDelayFrames   = 0;
+    player->lockDelay         = lockDelayFormula(player);
 
-    player->currToBeFrozen   = false;
-    player->lockDelayFrames  = 0;
-    player->lockDelay        = lockDelayFormula(player);
+    player->lnTimeout         = lnTimeoutFormula(player, player->level);
 
-    player->lnTimeout        = lnTimeoutFormula(player, player->level);
+    player->helpTextOpen      = false;
 
-    player->helpTextOpen     = false;
-
-    player->mainMenuOpen     = false;
+    player->mainMenuOpen      = false;
 
     for (int i = 0; i < QUIT; i++) {
         player->buttons[i] = (Button){
@@ -1021,32 +1037,38 @@ void reset(Player* player, Vector* ARENA) {
 
     player->paused            = false;
 
-    player->helpTextOpen     = false;
+    player->helpTextOpen      = false;
 
-    player->mainMenuOpen     = false;
+    player->mainMenuOpen      = false;
 
-    for (int i = 0; i < SHP_MATR_SZ; i++) {
+    player->heldPiece.MATR_SZ = MATR_SZ_FOUR;
+    for (int i = 0; i < player->heldPiece.MATR_SZ; i++) {
+        for (int j = 0; j < player->heldPiece.MATR_SZ; j++) {
+            setPieceShapeField(&player->heldPiece, i, j, getGlobalShapeField(player->heldPiece.MATR_SZ, PIECE_NULL, i, j));
+        }
+    }
+    /*for (int i = 0; i < SHP_MATR_SZ; i++) {
         for (int j = 0; j < SHP_MATR_SZ; j++) {
             player->heldPiece.shape[i][j] = PIECE_SHAPES[PIECE_NULL][i][j];
         }
-    }
+    }*/
 
-    player->heldPiece.pos    = (Pos){.x = 0, .y = 0};
-    player->heldPiece.color  = EMPTY_MRKR;
-    player->heldPiece.type   = PIECE_NULL;
+    player->heldPiece.pos     = (Pos){.x = 0, .y = 0};
+    player->heldPiece.color   = EMPTY_MRKR;
+    player->heldPiece.type    = PIECE_NULL;
 
-    player->swappedThisRound = false;
+    player->swappedThisRound  = false;
 
-    player->currToBeFrozen   = false;
+    player->currToBeFrozen    = false;
 
-    player->lockDelayFrames  = 0;
-    player->lockDelay        = lockDelayFormula(player);
+    player->lockDelayFrames   = 0;
+    player->lockDelay         = lockDelayFormula(player);
 
-    player->lnTimeout        = lnTimeoutFormula(player, player->level);
+    player->lnTimeout         = lnTimeoutFormula(player, player->level);
 
-    player->firstLevel       = true;
+    player->firstLevel        = true;
 
-    player->logOpen          = false;
+    player->logOpen           = false;
 
     clearterm();
 }
@@ -1068,12 +1090,12 @@ void quit(Player* player, Vector* ARENA) {
 void renderGame(Player* player, Vector* ARENA) {
     // Must add 1 to rows to include bottom bound;
     // Must add 3 to cols to include left and right bounds + CRLF ("\r\n");
-    // Must add NXT_PC_XPOS_STRT + SHP_MATR_SZ to cols so we fit the padding AND the columns used to display the next/held piece.
+    // Must add NXT_PC_XPOS_STRT + MATR_SZ_FOUR to cols so we fit the padding AND the max amount of columns needed to display the next/held piece.
     // We must multiply by 16 to account for writing two characters for each field, as well as escape codes for enabling and disabling colors.
 
     // We allocate on the heap to allow pointer arithmetic with the buffer
     size_t alloc = (
-        ( ((ARENA_ROWS + 1) * (ARENA_COLS + (NXT_PC_XPOS_STRT + SHP_MATR_SZ) + 3) * 16) + 1 ) *
+        ( ((ARENA_ROWS + 1) * (ARENA_COLS + (NXT_PC_XPOS_STRT + MATR_SZ_FOUR) + 3) * 16) + 1 ) *
         sizeof(char)
     );
 
@@ -1117,35 +1139,50 @@ void renderGame(Player* player, Vector* ARENA) {
 
         for (int j = 0; j < NXT_PC_XPOS_STRT; j++) writeField(&toPrint, EMPTY_MRKR, NULL);
 
-        // If the piece is a 2x2 block, it needs to be shifted up by 1 so it seems to appear at the top of its matrix
-        // If not, we keep the offset of 2 to create a gap between the label and the display itself
-        uint8_t nxtOffset = (player->nextPiece.type == PIECE_O) ? 1 : 2;
-        uint8_t hldOffset = (player->heldPiece.type == PIECE_O) ? 1 : 2;
+        // We shift the actual piece displays down by two lines to create an extra line of padding
+        // between the labels and the pieces
+        uint8_t dispYOffset = 2;
 
-        if (!player->gameOver && i >= NXT_PC_YPOS_STRT + nxtOffset && i < NXT_PC_YPOS_STRT + nxtOffset + SHP_MATR_SZ) {
-            for (int j = 0; j < SHP_MATR_SZ; j++) {
-                if (player->nextPiece.shape[i - (NXT_PC_YPOS_STRT + nxtOffset)][j] == EMPTY_MRKR) {
-                    writeField(&toPrint, EMPTY_MRKR, NULL);
-                } else if (player->nextPiece.shape[i - (NXT_PC_YPOS_STRT + nxtOffset)][j] == 1) {
-                    writeField(&toPrint, player->nextPiece.color, NULL);
-                } else {
-                    clearterm();
-                    fputs("\r\nERROR: INVALID MARKER IN PIECE\r\n", stdout);
-                    abort();
+        if (!player->gameOver && i >= NXT_PC_YPOS_STRT + dispYOffset && i < NXT_PC_YPOS_STRT + dispYOffset + player->nextPiece.MATR_SZ) {
+            // In the case of an O or J piece, we want to shift one column to the right,
+            // as there is no left-padding in the matrix representation,
+            // making it look shifted to the left.
+            bool shouldOffsetRight = player->nextPiece.type == PIECE_O || player->nextPiece.type == PIECE_J;
+            if (shouldOffsetRight) writeField(&toPrint, EMPTY_MRKR, NULL);
+
+            for (int j = 0; j < player->nextPiece.MATR_SZ; j++) {
+                switch (getPieceShapeField(&player->nextPiece, i - (NXT_PC_YPOS_STRT + dispYOffset), j)) {
+                    case EMPTY_MRKR: writeField(&toPrint, EMPTY_MRKR, NULL);              break;
+                    case          1: writeField(&toPrint, player->nextPiece.color, NULL); break;
+                    default: {
+                        clearterm();
+                        fputs("\r\nERROR: INVALID MARKER IN PIECE\r\n", stderr);
+                        abort();
+                    }
                 }
             }
-        } else if (!player->gameOver && i >= HLD_PC_YPOS_STRT + hldOffset && i < HLD_PC_YPOS_STRT + hldOffset + SHP_MATR_SZ) {
-            for (int j = 0; j < SHP_MATR_SZ; j++) {
-                if (player->heldPiece.shape[i - (HLD_PC_YPOS_STRT + hldOffset)][j] == EMPTY_MRKR) {
-                    writeField(&toPrint, EMPTY_MRKR, NULL);
-                } else if (player->heldPiece.shape[i - (HLD_PC_YPOS_STRT + hldOffset)][j] == 1) {
-                    writeField(&toPrint, player->heldPiece.color, NULL);
-                } else {
-                    clearterm();
-                    fputs("\r\nERROR: INVALID MARKER IN PIECE\r\n", stdout);
-                    abort();
+
+            // If there was a next-piece with a larger footprint than the current one,
+            // there'll be fields left over from the last render,
+            // so we must overwrite them here.
+            for (int j = 0; j < MATR_SZ_FOUR - player->nextPiece.MATR_SZ - ((shouldOffsetRight) ? 1 : 0); j++) writeField(&toPrint, EMPTY_MRKR, NULL);
+        } else if (!player->gameOver && i >= HLD_PC_YPOS_STRT + dispYOffset && i < HLD_PC_YPOS_STRT + dispYOffset + player->heldPiece.MATR_SZ) {
+            bool shouldOffsetRight = player->heldPiece.type == PIECE_O || player->heldPiece.type == PIECE_L;
+            if (shouldOffsetRight) writeField(&toPrint, EMPTY_MRKR, NULL);
+
+            for (int j = 0; j < player->heldPiece.MATR_SZ; j++) {
+                switch (getPieceShapeField(&player->heldPiece, i - (HLD_PC_YPOS_STRT + dispYOffset), j)) {
+                    case EMPTY_MRKR: writeField(&toPrint, EMPTY_MRKR, NULL);              break;
+                    case          1: writeField(&toPrint, player->heldPiece.color, NULL); break;
+                    default: {
+                        clearterm();
+                        fputs("\r\nERROR: INVALID MARKER IN PIECE\r\n", stderr);
+                        abort();
+                    }
                 }
             }
+
+            // The footprint of the held-piece is constant, so we can omit empty padding.
         } else if (!player->gameOver && i == NXT_PC_YPOS_STRT) {
             writeField(&toPrint, TEXT_MRKR, "NE");
             writeField(&toPrint, TEXT_MRKR, "XT");
@@ -1158,7 +1195,7 @@ void renderGame(Player* player, Vector* ARENA) {
             writeField(&toPrint, EMPTY_MRKR, NULL);
         } else {
             // Fill the remaining columns with spaces if there's nothing to print
-            for (int j = 0; j < SHP_MATR_SZ; j++) writeField(&toPrint, EMPTY_MRKR, NULL);
+            for (int j = 0; j < MATR_SZ_FOUR; j++) writeField(&toPrint, EMPTY_MRKR, NULL);
         }
 
         writeField(&toPrint, TEXT_MRKR, "\r\n");
@@ -1267,10 +1304,11 @@ void togglePause(Player* player) {
     if (player->gameOver) return;
 
     player->paused = !player->paused;
-    if (player->paused) fputs("\r\nPAUSED\r\n", stdout);
-    else {
-        clearterm();
-
+    clearterm();
+    if (player->paused) {
+        fputs("PAUSED\r\n", stdout);
+        fflush(stdout);
+    } else {
         uint8_t c;
         flushstdin(&c);
     }
@@ -1317,6 +1355,9 @@ void regenBag(Player* player) {
     }
 
     while (remaining->len >= 1) {
+        Piece* bagPiece = &player->bag[player->bagLen];
+              *bagPiece = createPiece();
+
         #ifdef _WIN32
             uint32_t randInd;
             rand_s(&randInd);
@@ -1327,26 +1368,36 @@ void regenBag(Player* player) {
 
         uint8_t shapeInd = *(uint8_t*)remaining->arr[randInd];
 
-        for (int i = 0; i < SHP_MATR_SZ; i++) {
-            for (int j = 0; j < SHP_MATR_SZ; j++) {
-                player->bag[player->bagLen].shape[i][j] = PIECE_SHAPES[shapeInd][i][j];
+        bagPiece->type = shapeInd;
+
+        switch (bagPiece->type) {
+            case PIECE_NULL:
+            case PIECE_I: bagPiece->MATR_SZ = MATR_SZ_FOUR;  break;
+            case PIECE_O: bagPiece->MATR_SZ = MATR_SZ_TWO;   break;
+            default:      bagPiece->MATR_SZ = MATR_SZ_THREE; break;
+        }
+
+        for (int i = 0; i < bagPiece->MATR_SZ; i++) {
+            for (int j = 0; j < bagPiece->MATR_SZ; j++) {
+                setPieceShapeField(bagPiece, i, j, getGlobalShapeField(bagPiece->MATR_SZ, bagPiece->type, i, j));
             }
         }
 
-        player->bag[player->bagLen].type  = shapeInd;
-        player->bag[player->bagLen].color = shapeInd;
-        player->bag[player->bagLen].pos   = (Pos){
+        if (bagPiece->MATR_SZ > MATR_SZ_FOUR || bagPiece->MATR_SZ < MATR_SZ_TWO) {
+            printf("\r\nINVALID PIECE MATRIX SIZE: %i (Line: %i)\r\n", bagPiece->MATR_SZ, __LINE__);
+            fflush(stdout);
+            abort();
+        }
+
+        bagPiece->color = (MARKERS)bagPiece->type;
+        bagPiece->pos = (Pos){
             /*
-            Must subtract 2 from the half to account for zero-based coordinates as well as center the piece
-            (since normally the top left corner, and with it the entire left-most column would be centered)
+            We must subtract at least 1 as ARENA_COLS / 2 is 1-based, while coordinates are 0-based.
+            For non-O pieces, there will be a blank space at the left of their shape matrices, requiring the subtraction of 2 instead of 1.
             */
-            .x = ARENA_COLS / 2 - 2,
+            .x = ARENA_COLS / 2 - ((bagPiece->type == PIECE_O) ? 1 : 2),
             .y = 0
         };
-
-        // If the shape is a 2x2 block (O-tetromino), shift it up so its occupied space begins at the very top of the arena,
-        // instead of being 1 lower visually due to the matrix for it having padding on the top
-        if (player->bag[player->bagLen].type == PIECE_O) player->bag[player->bagLen].pos.y--;
 
         player->bagLen++;
         vecrmv(remaining, randInd);
@@ -1356,64 +1407,56 @@ void regenBag(Player* player) {
 }
 
 void useNextPiece(Player* player) {
+    if (player->nextPiece.MATR_SZ != requiredPieceMatrixSize(&player->nextPiece)) abort();
+
     player->currPiece = player->nextPiece;
     player->nextPiece = player->bag[--player->bagLen];
     if (player->bagLen < 1) regenBag(player);
 }
 
 Piece createPiece() {
-    Piece piece = {
-        .pos = (Pos){
-            .x = 0,
-            .y = 0
-        },
-        .type =  PIECE_NULL,
-        .color = EMPTY_MRKR
-    };
-
-    for (int i = 0; i < SHP_MATR_SZ; i++) {
-        for (int j = 0; j < SHP_MATR_SZ; j++) {
-            piece.shape[i][j] = PIECE_SHAPES[PIECE_NULL][i][j];
-        }
-    }
-
-    return piece;
+    Piece p = {0};
+    p.MATR_SZ = MATR_SZ_FOUR;
+    return p;
 }
 
 void initPiece(Piece* p) {
-    p->pos = (Pos){
-        /*
-        Must subtract 2 from the half to account for zero-based coordinates as well as center the piece
-        (since normally the top left corner, and with it the entire left-most column would be centered)
-        */
-        .x = ARENA_COLS / 2 - 2,
-        .y = 0
-    };
-
     #ifdef _WIN32
         rand_s(&p->type);
-        p->type = (p->type % 7) + 1;
+        p->type = (p->type % 7) + 1; // Must add 1 to skip PIECE_NULL
     #else
         p->type = arc4random_uniform((uint32_t)PIECE_Z) + 1; // Must add 1 to skip PIECE_NULL
     #endif
 
-    // If the shape is a 2x2 block (O-tetromino), shift it up so its occupied space begins at the very top of the arena,
-    // instead of being 1 lower visually due to the matrix for it having padding on the top
-    if (p->type == PIECE_O) p->pos.y--;
+    p->pos = (Pos){
+        /*
+        We must subtract at least 1 as ARENA_COLS / 2 is 1-based, while coordinates are 0-based.
+        For non-O pieces, there will be a blank space at the left of their shape matrices, requiring the subtraction of 2 instead of 1.
+        */
+        .x = ARENA_COLS / 2 - ((p->type == PIECE_O) ? 1 : 2),
+        .y = 0
+    };
+
+    switch (p->type) {
+        case PIECE_I:
+        case PIECE_NULL: p->MATR_SZ = MATR_SZ_FOUR;  break;
+        case PIECE_O:    p->MATR_SZ = MATR_SZ_TWO;   break;
+        default:         p->MATR_SZ = MATR_SZ_THREE; break;
+    }
 
     p->color = (MARKERS)p->type;
 
-    for (int i = 0; i < SHP_MATR_SZ; i++) {
-        for (int j = 0; j < SHP_MATR_SZ; j++) {
-            p->shape[i][j] = PIECE_SHAPES[p->type][i][j];
+    for (int i = 0; i < p->MATR_SZ; i++) {
+        for (int j = 0; j < p->MATR_SZ; j++) {
+            setPieceShapeField(p, i, j, getGlobalShapeField(p->MATR_SZ, p->type, i, j));
         }
     }
 }
 
 void setPieceToNull(Piece* p) {
-    for (int i = 0; i < SHP_MATR_SZ; i++) {
-        for (int j = 0; j < SHP_MATR_SZ; j++) {
-            p->shape[i][j] = PIECE_SHAPES[PIECE_NULL][i][j];
+    for (int i = 0; i < p->MATR_SZ; i++) {
+        for (int j = 0; j < p->MATR_SZ; j++) {
+            setPieceShapeField(p, i, j, 0);
         }
     }
 }
@@ -1421,9 +1464,9 @@ void setPieceToNull(Piece* p) {
 
 
 bool pieceCollides(Piece* p, Vector* ARENA) {
-    for (int i = 0; i < SHP_MATR_SZ; i++) {
-        for (int j = 0; j < SHP_MATR_SZ; j++) {
-            if (!p->shape[i][j]) continue;
+    for (int i = 0; i < p->MATR_SZ; i++) {
+        for (int j = 0; j < p->MATR_SZ; j++) {
+            if (!getPieceShapeField(p, i, j)) continue;
 
             Pos APOS = FPOStoAPOS(p, i, j);
             if ( APOS.x < 0 || APOS.x >= ARENA_COLS || APOS.y < 0 || APOS.y >= ARENA_ROWS ) return true;
@@ -1472,28 +1515,28 @@ static inline void moveLeft(Piece* p, Vector* ARENA) {
 
 
 void transpose(Piece* p) {
-    for (int i = 0; i < SHP_MATR_SZ; i++) {
-        for (int j = 0; j < SHP_MATR_SZ; j++) {
+    for (int i = 0; i < p->MATR_SZ; i++) {
+        for (int j = 0; j < p->MATR_SZ; j++) {
             // The left half of the diagonal (from top-left to bottom-right) will already be swapped, so we skip it
             // We also skip 'j' being equal to 'i' as such fields are not affected
             if (j > i) {
-                uint8_t temp = p->shape[i][j];
-                p->shape[i][j] = p->shape[j][i];
-                p->shape[j][i] = temp;
+                uint8_t temp = getPieceShapeField(p, i, j);
+                setPieceShapeField(p, i, j, getPieceShapeField(p, j, i));
+                setPieceShapeField(p, j, i, temp);
             }
         }
     }
 }
 
 void reverseRows(Piece* p) {
-    for (int i = 0; i < SHP_MATR_SZ; i++) {
-        for (int j = 0; j < (int)(SHP_MATR_SZ / 2); j++) { // Must divide by 2 as going through the second half would reverse the operation
+    for (int i = 0; i < p->MATR_SZ; i++) {
+        for (int j = 0; j < (int)(p->MATR_SZ / 2); j++) { // Must divide by 2 as going through the second half would reverse the operation
             // Must subtract 1 as the matrix size is 1-based
-            int lastIndJ = SHP_MATR_SZ-1 - j;
+            int lastIndJ = p->MATR_SZ-1 - j;
 
-            uint8_t temp = p->shape[i][j];
-            p->shape[i][j] = p->shape[i][lastIndJ];
-            p->shape[i][lastIndJ] = temp;
+            uint8_t temp = getPieceShapeField(p, i, j);
+            setPieceShapeField(p, i, j, getPieceShapeField(p, i, lastIndJ));
+            setPieceShapeField(p, i, lastIndJ, temp);
         }
     }
 }
@@ -1542,6 +1585,9 @@ bool canRotateCCW(Piece* p, Vector* ARENA) {
 }
 
 void rotateCW(Piece* p, Vector* ARENA) {
+    // Rotating the O-piece doesn't do anything, so we skip it
+    if (p->type == PIECE_O) return;
+
     if (canRotateCW(p, ARENA)) {
         rotCW(p);
         wallKick(p, ARENA);
@@ -1549,6 +1595,9 @@ void rotateCW(Piece* p, Vector* ARENA) {
 }
 
 void rotateCCW(Piece* p, Vector* ARENA) {
+    // Rotating the O-piece doesn't do anything, so we skip it
+    if (p->type == PIECE_O) return;
+
     if (canRotateCCW(p, ARENA)) {
         rotCCW(p);
         wallKick(p, ARENA);
@@ -1560,42 +1609,53 @@ void rotateCCW(Piece* p, Vector* ARENA) {
 void swapHeldPiece(Player* player) {
     if (player->swappedThisRound) return;
 
+    Piece* heldPiece = &player->heldPiece;
+    Piece* currPiece = &player->currPiece;
+
+
     if (player->heldPiece.type == PIECE_NULL) {
-        for (int i = 0; i < SHP_MATR_SZ; i++) {
-            for  (int j = 0; j < SHP_MATR_SZ; j++) {
-                player->heldPiece.shape[i][j] = player->currPiece.shape[i][j];
+        for (int i = 0; i < currPiece->MATR_SZ; i++) {
+            for (int j = 0; j < currPiece->MATR_SZ; j++) {
+                setPieceShapeField(heldPiece, i, j, getPieceShapeField(currPiece, i, j));
             }
         }
 
-        player->heldPiece.color = player->currPiece.color;
-        player->heldPiece.type  = player->currPiece.type;
+        heldPiece->color = currPiece->color;
+        heldPiece->type  = currPiece->type;
 
         useNextPiece(player);
     } else {
-        for (int i = 0; i < SHP_MATR_SZ; i++) {
-            for (int j = 0; j < SHP_MATR_SZ; j++) {
-                uint8_t temp = player->heldPiece.shape[i][j];
-                player->heldPiece.shape[i][j] = player->currPiece.shape[i][j];
-                player->currPiece.shape[i][j] = temp;
+        Piece tempHeldPiece = *heldPiece;
+        *heldPiece = createPiece();
+
+        for (int i = 0; i < currPiece->MATR_SZ; i++) {
+            for (int j = 0; j < currPiece->MATR_SZ; j++) {
+                setPieceShapeField(heldPiece, i, j, getPieceShapeField(currPiece, i, j));
             }
         }
 
-        MARKERS tempColor = player->heldPiece.color;
-        player->heldPiece.color = player->currPiece.color;
-        player->currPiece.color = tempColor;
+        currPiece->MATR_SZ = requiredPieceMatrixSize(&tempHeldPiece);
 
-        SHAPES tempType = player->heldPiece.type;
-        player->heldPiece.type = player->currPiece.type;
-        player->currPiece.type = tempType;
+        for (int i = 0; i < currPiece->MATR_SZ; i++) {
+            for (int j = 0; j < currPiece->MATR_SZ; j++) {
+                setPieceShapeField(currPiece, i, j, getPieceShapeField(&tempHeldPiece, i, j));
+            }
+        }
+
+        MARKERS tempColor = tempHeldPiece.color;
+        heldPiece->color  = currPiece->color;
+        currPiece->color  = tempColor;
+
+        SHAPES tempType = tempHeldPiece.type;
+        heldPiece->type = currPiece->type;
+        currPiece->type = tempType;
 
         // Same logic as in createPiece()
 
-        player->currPiece.pos = (Pos){
-            .x = ARENA_COLS / 2 - 2,
+        currPiece->pos = (Pos){
+            .x = ARENA_COLS / 2 - ((currPiece->type == PIECE_O) ? 1 : 2),
             .y = 0
         };
-
-        if (player->currPiece.type == PIECE_O) player->currPiece.pos.y--;
     }
 
     player->swappedThisRound = true;
@@ -1604,9 +1664,9 @@ void swapHeldPiece(Player* player) {
 
 
 void engrainPiece(Piece* p, Vector* ARENA) {
-    for (int i = 0; i < SHP_MATR_SZ; i++) {
-        for (int j = 0; j < SHP_MATR_SZ; j++) {
-            if (!p->shape[i][j]) continue;
+    for (int i = 0; i < p->MATR_SZ; i++) {
+        for (int j = 0; j < p->MATR_SZ; j++) {
+            if (!getPieceShapeField(p, i, j)) continue;
 
             Pos APOS = FPOStoAPOS(p, i, j);
             *(int8_t*)( (Vector*)ARENA->arr[APOS.y] )->arr[APOS.x] = p->color;
@@ -1948,7 +2008,7 @@ void viewLogBtnPressed(void* player) {
     Player* _player = player;
 
     if (_player->logUnsorted) {
-        sortLogVec(&_player->log, _player->buttons[SORT_BY - 1].cycle);
+        sortLogVec(_player->log, _player->buttons[SORT_BY - 1].cycle);
         _player->logUnsorted = false;
     }
     printLog(_player->log);
@@ -1960,7 +2020,7 @@ void exportLogBtnPressed(void* player) {
     Player* _player = player;
 
     if (_player->logUnsorted) {
-        sortLogVec(&_player->log, _player->buttons[SORT_BY - 1].cycle);
+        sortLogVec(_player->log, _player->buttons[SORT_BY - 1].cycle);
         _player->logUnsorted = false;
     }
     exportLog(_player->log);

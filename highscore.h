@@ -36,7 +36,7 @@ void  writeLog(Vector* log);
 void exportLog(Vector* log);
 void   readLog(Vector* log);
 
-void sortLogVec(Vector** log, SORT_TYPES sortType);
+void sortLogVec(Vector* log, SORT_TYPES sortType);
 
 void printLog(Vector* log);
 
