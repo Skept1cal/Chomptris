@@ -33,7 +33,7 @@
 #define MENU_PADDING     14 // How many columns a button or its input field should push text to the right
 
 // Appears at top of main menu
-#define VERSION_STR       "V1.6.0"
+#define VERSION_STR       "V1.6.1"
 #define MENU_TITLE        ("CHOMPTRIS " VERSION_STR)
 
 // Labels for the buttons in main menu
@@ -184,6 +184,7 @@ typedef struct {
     uint8_t     id;
     const char* label;
     uint8_t     valueType;
+    bool        leaveGap;              // If this is true, there will be an extra newline inserted after rendering the button's label
     void        (*func)(void* player); // Must use void* as the Player type is undefined here
 } Button;
 
@@ -208,8 +209,6 @@ typedef struct {
     uint8_t  bagLen;           // Tracker to determine whether bag needs to be regenerated
 
     bool     paused;
-
-    bool     justSpawned;      // Flag to mark whether the current piece just spawned
 
     bool     swappedThisRound; // Flag to mark whether the player has swapped between the current and held piece this round
 

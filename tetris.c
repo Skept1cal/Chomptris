@@ -96,7 +96,7 @@ const char* BUTTON_LABELS[] = {
     QUIT_LBL
 };
 
-const uint8_t MAX_INPUT_LENS[NAME] = {
+const uint8_t MAX_INPUT_LENS[] = {
     [STRT_LVL - 1]=MAX_LVL_INPUT_LEN,
     [NAME - 1]=MAX_NME_INPUT_LEN
 };
@@ -231,10 +231,10 @@ int main(int argc, char** argv) {
 
                         useNextPiece(&player);
                         player.score           += pieceFreezeFormula();
-                        player.justSpawned      = true;
                         player.swappedThisRound = false;
                         player.currToBeFrozen   = false;
                         player.lockDelayFrames  = 0;
+                        player.framesPassed     = 0; // Must reset this so the piece always takes 1 whole tick to move from its spawn position
 
                         if (pieceCollides(&player.currPiece, ARENA)) {
                             player.gameOver = true;
@@ -252,11 +252,7 @@ int main(int argc, char** argv) {
                 player.framesPassed++;
                 if (player.framesPassed >= player.speed) {
                     player.framesPassed = 0;
-
-                    // Avoid immediately shifting down the piece, which would make it look like it spawned a field lower than it should
-                    if (!player.gameOver && !player.justSpawned) moveDown(&player.currPiece, ARENA);
-
-                    player.justSpawned = false;
+                    if (!player.gameOver) moveDown(&player.currPiece, ARENA);
                 }
 
                 if (!player.gameOver) renderGame(&player, ARENA);
@@ -327,12 +323,13 @@ static inline void readInput(Player* player, Vector* ARENA, uint8_t* c) {
         if (!player->paused && !player->helpTextOpen && !player->logOpen && *c == 0xe0) {
             *c = _getch();
             switch (*c) {
-                case 72:    upPressed(player, ARENA); return;             // H
-                case 80:  downPressed(player, ARENA); return;             // P
-                case 77: rightPressed(player, ARENA); return;             // M
-                case 75:  leftPressed(player, ARENA); return;             // K
+                case 72:    upPressed(player, ARENA); break;             // H
+                case 80:  downPressed(player, ARENA); break;             // P
+                case 77: rightPressed(player, ARENA); break;             // M
+                case 75:  leftPressed(player, ARENA); break;             // K
             }
-        } else if (*c == 27) {                                            // ESC
+            return;
+        } else if (*c == 27) {                                           // ESC
             goToMenu(player, ARENA);
             return;
         }
@@ -340,65 +337,66 @@ static inline void readInput(Player* player, Vector* ARENA, uint8_t* c) {
         if (*c == '\x1b') {
             if (!player->paused && !player->helpTextOpen && !player->logOpen && read(STDIN_FILENO, c, 1) == 1 && read(STDIN_FILENO, c, 1) == 1) {
                 switch (*c) {
-                    case 65:    upPressed(player, ARENA); return;         // A
-                    case 66:  downPressed(player, ARENA); return;         // B
-                    case 67: rightPressed(player, ARENA); return;         // C
-                    case 68:  leftPressed(player, ARENA); return;         // D
+                    case 65:    upPressed(player, ARENA); break;         // A
+                    case 66:  downPressed(player, ARENA); break;         // B
+                    case 67: rightPressed(player, ARENA); break;         // C
+                    case 68:  leftPressed(player, ARENA); break;         // D
                 }
-            } else if (read(STDIN_FILENO, c, 1) == 0) {                   // Checks whether ESC was actually pressed and not something beginning with ESC
+            } else if (read(STDIN_FILENO, c, 1) == 0) {                  // Checks whether ESC was actually pressed and not something beginning with ESC
                 goToMenu(player, ARENA);
-                return;
             }
+            if (read(STDIN_FILENO, c, 1) == 1) flushstdin(c);
+            return;
         }
     #endif
 
     switch (*c) {
-        case  1: clearterm(); return;                               // ^A
-        case 17: player->quit = true; return;                       // ^Q
-        case 18: {                                                  // ^R
+        case  1: clearterm(); break;                               // ^A
+        case 17: player->quit = true; break;                       // ^Q
+        case 18: {                                                 // ^R
             if (!player->mainMenuOpen) {
                 reset(player, ARENA);
             }
-            return;
+            break;
         }
-        case  8: {                                                  // ^H
+        case  8: {                                                 // ^H
             if (!player->gameOver && !player->logOpen) {
                 toggleHelp(player, ARENA);
             }
-            return;
+            break;
         }
-        case 32: {                                                  // SPACE
+        case 32: {                                                 // SPACE
             if (!player->helpTextOpen && !player->mainMenuOpen) {
                 togglePause(player);
             }
-            return;
+            break;
         }
-        case 13: {                                                  // ^M/ENTER
+        case 13: {                                                 // ^M/ENTER
             if (player->mainMenuOpen && !player->helpTextOpen && !player->logOpen) {
                 selectBtn(player);
                 flushstdin(c);
             }
-            return;
+            break;
         }
     }
 
     if (!player->paused && !player->helpTextOpen && !player->mainMenuOpen) {
         *c = tolower(*c);
         switch (*c) {
-            case 110:                                               // n/N
-            case 119:                                               // w/W
-            case 120: rotateCW(&player->currPiece, ARENA); return;  // x/X
+            case 110:                                              // n/N
+            case 119:                                              // w/W
+            case 120: rotateCW(&player->currPiece, ARENA); break;  // x/X
 
-            case  98:                                               // b/B
-            case 121:                                               // y/Y
-            case 122: rotateCCW(&player->currPiece, ARENA); return; // z/Z
+            case  98:                                              // b/B
+            case 121:                                              // y/Y
+            case 122: rotateCCW(&player->currPiece, ARENA); break; // z/Z
 
-            case 109:                                               // m/M
-            case  99: swapHeldPiece(player); return;                // c/C
+            case 109:                                              // m/M
+            case  99: swapHeldPiece(player); break;                // c/C
 
-            case 115:  downPressed(player, ARENA); return;          // s/S
-            case 100: rightPressed(player, ARENA); return;          // d/D
-            case  97:  leftPressed(player, ARENA); return;          // a/A
+            case 115:  downPressed(player, ARENA); break;          // s/S
+            case 100: rightPressed(player, ARENA); break;          // d/D
+            case  97:  leftPressed(player, ARENA); break;          // a/A
         }
     }
 
@@ -889,14 +887,6 @@ Vector* createArena() {
 
     return ARENA;
 }
-// Temporary function to test rendering
-void alternateArena(Vector* ARENA) {
-    for (int i = 0; i < ARENA_ROWS; i++) {
-        for (int j = 0; j < ARENA_COLS; j++) {
-            *(int8_t*)((Vector*)ARENA->arr[i])->arr[j] = !*(int8_t*)((Vector*)ARENA->arr[i])->arr[j];
-        }
-    }
-}
 
 void initPlayer(Player* player) {
     player->speed             = START_SPEED;
@@ -916,8 +906,6 @@ void initPlayer(Player* player) {
     initPiece(&player->nextPiece);
     useNextPiece(player);
 
-    player->justSpawned       = true;
-
     player->paused            = false;
 
     player->heldPiece         = createPiece();
@@ -936,12 +924,13 @@ void initPlayer(Player* player) {
 
     for (int i = 0; i < QUIT; i++) {
         player->buttons[i] = (Button){
-            .chars       = (i < SORT_BY) ? crtvec(MAX_INPUT_LENS[i], DTYPE_NORMAL, NULL) : NULL, // Only STRT_LVL and NAME need input fields
-            .cycle       = 0,
-            .cycleLen    = 0,
-            .id          = i,
-            .label       = BUTTON_LABELS[i],
-            .func        = NULL
+            .chars    = (i < SORT_BY) ? crtvec(MAX_INPUT_LENS[i], DTYPE_NORMAL, NULL) : NULL, // Only STRT_LVL and NAME need input fields
+            .cycle    = 0,
+            .cycleLen = 0,
+            .id       = i,
+            .label    = BUTTON_LABELS[i],
+            .func     = NULL,
+            .leaveGap = (i == NAME - 1 || i == EXPORT_LOG - 1 || i == CLR_LOG - 1) ? true : false
         };
 
         switch (i + 1) { // Must add 1 as the enum is 1-based
@@ -1033,7 +1022,6 @@ void reset(Player* player, Vector* ARENA) {
     player->nextPiece         = createPiece();
     initPiece(&player->nextPiece);
     useNextPiece(player);
-    player->justSpawned       = true;
 
     player->paused            = false;
 
@@ -1047,11 +1035,6 @@ void reset(Player* player, Vector* ARENA) {
             setPieceShapeField(&player->heldPiece, i, j, getGlobalShapeField(player->heldPiece.MATR_SZ, PIECE_NULL, i, j));
         }
     }
-    /*for (int i = 0; i < SHP_MATR_SZ; i++) {
-        for (int j = 0; j < SHP_MATR_SZ; j++) {
-            player->heldPiece.shape[i][j] = PIECE_SHAPES[PIECE_NULL][i][j];
-        }
-    }*/
 
     player->heldPiece.pos     = (Pos){.x = 0, .y = 0};
     player->heldPiece.color   = EMPTY_MRKR;
@@ -1212,7 +1195,6 @@ void renderGame(Player* player, Vector* ARENA) {
 
 
     fputs("\x1b[H", stdout);
-
     fputs(toPrintBegin, stdout);
 
     if (player->name[0]) {
@@ -1393,9 +1375,9 @@ void regenBag(Player* player) {
         bagPiece->pos = (Pos){
             /*
             We must subtract at least 1 as ARENA_COLS / 2 is 1-based, while coordinates are 0-based.
-            For non-O pieces, there will be a blank space at the left of their shape matrices, requiring the subtraction of 2 instead of 1.
+            For non-O/J pieces, there will be a blank space at the left of their shape matrices, requiring the subtraction of 2 instead of 1.
             */
-            .x = ARENA_COLS / 2 - ((bagPiece->type == PIECE_O) ? 1 : 2),
+            .x = ARENA_COLS / 2 - ((bagPiece->type == PIECE_O || bagPiece->type == PIECE_J) ? 1 : 2),
             .y = 0
         };
 
@@ -1431,9 +1413,9 @@ void initPiece(Piece* p) {
     p->pos = (Pos){
         /*
         We must subtract at least 1 as ARENA_COLS / 2 is 1-based, while coordinates are 0-based.
-        For non-O pieces, there will be a blank space at the left of their shape matrices, requiring the subtraction of 2 instead of 1.
+        For non-O/J pieces, there will be a blank space at the left of their shape matrices, requiring the subtraction of 2 instead of 1.
         */
-        .x = ARENA_COLS / 2 - ((p->type == PIECE_O) ? 1 : 2),
+        .x = ARENA_COLS / 2 - ((p->type == PIECE_O || p->type == PIECE_J) ? 1 : 2),
         .y = 0
     };
 
@@ -1805,14 +1787,7 @@ void renderMenu(Player* player) {
 
         printf("%*s\r\n", padding, "");
 
-        switch (i + 1) {
-            case       NAME:
-            case EXPORT_LOG:
-            case    CLR_LOG: {
-                fputs("\r\n", stdout);
-                break;
-            }
-        }
+        if (btn->leaveGap) fputs("\r\n", stdout);
     }
 
     fflush(stdout);
