@@ -33,7 +33,7 @@
 #define MENU_PADDING     14 // How many columns a button or its input field should push text to the right
 
 // Appears at top of main menu
-#define VERSION_STR       "V1.6.4"
+#define VERSION_STR       "V1.6.5"
 #define MENU_TITLE        ("CHOMPTRIS " VERSION_STR)
 
 // Labels for the buttons in main menu
@@ -391,8 +391,6 @@ void      quitBtnPressed(void* player);
 void   viewLogBtnPressed(void* player);
 void exportLogBtnPressed(void* player);
 void  clearLogBtnPressed(void* player);
-
-void executeSelected(Player* player);
 
 void    upPressed(Player* player, Vector* ARENA);
 void  downPressed(Player* player, Vector* ARENA);

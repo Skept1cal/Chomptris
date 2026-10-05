@@ -2060,17 +2060,6 @@ void clearLogBtnPressed(void* player) {
 
 
 
-void executeSelected(Player* player) {
-    if (player->selected != -1 && player->buttons[player->selected].onPress) {
-        player->buttons[player->selected].onPress(player);
-        player->selected = -1;
-
-        if (!player->helpTextOpen && !player->logOpen && player->mainMenuOpen) renderMenu(player);
-    }
-}
-
-
-
 void upPressed(Player* player, Vector* ARENA) {
     if (!player->mainMenuOpen) {
         rotateCW(&player->currPiece, ARENA);
