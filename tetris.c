@@ -97,6 +97,10 @@ const char* BUTTON_LABELS[] = {
     QUIT_LBL
 };
 
+const char* BUTTON_CONFIRM_MSGS[] = {
+    [CLR_LOG] = CLR_LOG_CONF_MSG
+};
+
 const uint8_t MAX_INPUT_LENS[] = {
     [STRT_LVL - 1] = MAX_LVL_INPUT_LEN,
     [NAME     - 1] = MAX_NME_INPUT_LEN
@@ -183,10 +187,11 @@ int main(int argc, char** argv) {
             }
 
             readInput(&player, ARENA, &c);
-
+            /*
             if (player.mainMenuOpen && !player.helpTextOpen) {
                 executeSelected(&player);
             }
+            */
             if (player.paused || player.helpTextOpen || player.mainMenuOpen) {
                 suspend(&framerate);
                 continue;
@@ -326,7 +331,13 @@ static inline void readInput(Player* player, Vector* ARENA, uint8_t* c) {
 
     #ifdef _WIN32
         *c = _getch();
-        if (!player->paused && !player->helpTextOpen && !player->logOpen && *c == 0xe0) {
+        if (
+            !player->paused           &&
+            !player->helpTextOpen     &&
+            !player->logOpen          &&
+            !player->confirmationOpen &&
+            *c == 0xe0
+        ) {
             *c = _getch();
             switch (*c) {
                 case 72:    upPressed(player, ARENA); break;             // H
@@ -341,7 +352,14 @@ static inline void readInput(Player* player, Vector* ARENA, uint8_t* c) {
         }
     #else
         if (*c == '\x1b') {
-            if (!player->paused && !player->helpTextOpen && !player->logOpen && read(STDIN_FILENO, c, 1) == 1 && read(STDIN_FILENO, c, 1) == 1) {
+            if (
+                !player->paused               &&
+                !player->helpTextOpen         &&
+                !player->logOpen              &&
+                !player->confirmationOpen     &&
+                read(STDIN_FILENO, c, 1) == 1 &&
+                read(STDIN_FILENO, c, 1) == 1
+            ) {
                 switch (*c) {
                     case 65:    upPressed(player, ARENA); break;         // A
                     case 66:  downPressed(player, ARENA); break;         // B
@@ -355,7 +373,6 @@ static inline void readInput(Player* player, Vector* ARENA, uint8_t* c) {
             // and would later map to completely unrelated keybinds due to the sent bytes,
             // so we empty the input if there is any.
             if (read(STDIN_FILENO, c, 1) == 1) flushstdin(c);
-
             return;
         }
     #endif
@@ -370,7 +387,7 @@ static inline void readInput(Player* player, Vector* ARENA, uint8_t* c) {
             break;
         }
         case  8: {                                                 // ^H
-            if (!player->gameOver && !player->logOpen) {
+            if (!player->gameOver && !player->logOpen && !player->confirmationOpen) {
                 toggleHelp(player, ARENA);
             }
             break;
@@ -410,7 +427,7 @@ static inline void readInput(Player* player, Vector* ARENA, uint8_t* c) {
         }
     }
 
-    if (player->mainMenuOpen && !player->helpTextOpen && !player->logOpen) {
+    if (player->mainMenuOpen && !player->helpTextOpen && !player->logOpen && !player->confirmationOpen) {
         if (player->buttons[player->selected].valueType == BVTYPE_CHAR) {
             if (*c >= 32 && *c <= 126) writeCharToInput(player, *c);
             else if (*c == 127 || *c == 4) removeCharFromInput(player); // DEL and ^D
@@ -938,7 +955,7 @@ void initPlayer(Player* player) {
             .id       = i,
             .label    = BUTTON_LABELS[i],
             .onPress  = BUTTON_FUNCTIONS[i], // This is fine as the array will contain NULL for unused indices/buttons
-            .leaveGap = (i == NAME - 1 || i == EXPORT_LOG - 1 || i == CLR_LOG - 1) ? true : false
+            .leaveGap = (i == NAME - 1 /*|| i == EXPORT_LOG - 1*/ || i == CLR_LOG - 1) ? true : false
         };
 
         switch (i + 1) { // Must add 1 as the enum is 1-based
@@ -1313,6 +1330,7 @@ void toggleHelp(Player* player, Vector* ARENA) {
 void goToMenu(Player* player, Vector* ARENA) {
     reset(player, ARENA);
     player->mainMenuOpen = true;
+    player->confirmationOpen = false;
     clearterm();
     renderMenu(player);
 }
@@ -1854,11 +1872,42 @@ void moveCursorRight(Player* player) {
 
 void selectBtn(Player* player) {
     if (player->selected != -1) {
-        player->selected    = -1;
-        player->inputCursor =  0;
+        player->selected = -1;
+        renderMenu(player);
+    } else {
+        player->selected = player->buttonCursor;
+
+        if (player->buttons[player->selected].onPress) {
+            player->buttons[player->selected].onPress(player);
+
+            if (
+                 player->mainMenuOpen     &&
+                !player->logOpen          &&
+                !player->confirmationOpen &&
+                !player->helpTextOpen
+            ) {
+                renderMenu(player);
+                struct timespec timeout = {
+                    .tv_sec = 0,
+                    .tv_nsec = (long)(1e9 / 30)
+                };
+                suspend(&timeout);
+                player->selected = -1;
+                renderMenu(player);
+            }
+
+            player->selected = -1;
+        } else {
+            // If the button that was selected had a callback,
+            // we only want to rerender the menu if the confirmation text is to vanish so as to not replace all (or part of it) with the menu.
+            // However, if the button did not have a callback, there's no confirmation text and so rerendering is completely fine.
+            // Rerendering is also actually needed to make sure selecting a button with a value type other than BVTYPE_NULL
+            // is actually shown to be selected.
+            renderMenu(player);
+        }
+
+        player->inputCursor = 0;
     }
-    else player->selected = player->buttonCursor;
-    renderMenu(player);
 }
 
 
@@ -1995,8 +2044,18 @@ void exportLogBtnPressed(void* player) {
 }
 
 void clearLogBtnPressed(void* player) {
-    clearLog(( (Player*)player )->log);
-    writeLog(( (Player*)player )->log);
+    Player* _player = player;
+    if (!_player->confirmationOpen) {
+        clearterm();
+        fputs(BUTTON_CONFIRM_MSGS[CLR_LOG], stdout);
+        fflush(stdout);
+        _player->confirmationOpen = true;
+    } else {
+        clearLog(_player->log);
+        writeLog(_player->log);
+        _player->confirmationOpen = false;
+        clearterm();
+    }
 }
 
 

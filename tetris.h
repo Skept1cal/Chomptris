@@ -33,7 +33,7 @@
 #define MENU_PADDING     14 // How many columns a button or its input field should push text to the right
 
 // Appears at top of main menu
-#define VERSION_STR       "V1.6.3"
+#define VERSION_STR       "V1.6.4"
 #define MENU_TITLE        ("CHOMPTRIS " VERSION_STR)
 
 // Labels for the buttons in main menu
@@ -51,6 +51,10 @@
 #define STRT_LBL          "START"
 #define HELP_LBL          "HELP"
 #define QUIT_LBL          "QUIT"
+
+
+
+#define CLR_LOG_CONF_MSG  "Clear log? (Press ENTER to confirm, ESC to abort)"
 
 
 
@@ -245,6 +249,8 @@ typedef struct Player {
     Vector*  log;
     bool     logOpen;          // Whether the player is currently looking at the highscore logs
     bool     logUnsorted;      // Whether there have been any modifications to the log since it was last sorted
+
+    bool     confirmationOpen; // Whether the player is currently looking at the confirmation screen of a button
 } Player;
 
 
