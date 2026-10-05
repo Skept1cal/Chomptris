@@ -135,39 +135,37 @@ void writeLog(Vector* log) {
     // then overwrite the original file with new data,
     // to prevent potential losses.
 
-    FILE* tmp = fopen(     TEMP_FNM, "wb");
+    FILE* f;
 
-    FILE*   f = fopen(INTRN_LOG_FNM, "rb");
-    if (!f) f = fopen(INTRN_LOG_FNM, "wb");
-    if (!f) return;
-    fclose(f);
-    f = fopen(INTRN_LOG_FNM, "rb");
+    if ( (f = fopen(INTRN_LOG_FNM, "rb")) ) {
+        fseek(f, 0L, SEEK_END);
+        long bytes = ftell(f);
+        if (bytes > 0L) {
+            FILE* tmp = fopen(TEMP_FNM, "wb");
+            if (!tmp) {
+                fclose(f);
+                return;
+            }
 
-    if (!tmp || !f) {
-        if (tmp) {
+            rewind(f);
+            
+            uint8_t* tempBuff = calloc(bytes, sizeof(uint8_t));
+            if (!tempBuff) {
+                fclose(tmp);
+                fclose(f);
+                return;
+            }
+             fread(tempBuff, sizeof(uint8_t), bytes,   f);
+            fwrite(tempBuff, sizeof(uint8_t), bytes, tmp);
+
             fclose(tmp);
-            remove(TEMP_FNM);
+            free(tempBuff);
         }
-        if (f) fclose(f);
-        return;
+
+        fclose(f);
     }
-
-    fseek(f, 0, SEEK_END);
-    size_t bytes = ftell(f);
-    rewind(f);
-
-    uint8_t* tempBuff = malloc(bytes);
-
-     fread(tempBuff, sizeof(uint8_t), bytes, f);
-    fwrite(tempBuff, sizeof(uint8_t), bytes, tmp);
-
-    fclose(tmp);
-    fclose(f);
-
-
-
-    f = fopen(INTRN_LOG_FNM, "wb");
-    if (!f) return;
+    
+    if ( !(f = fopen(INTRN_LOG_FNM, "wb")) ) return;
 
     char rowBuff[128] = {0};
     for (int i = 0, keyPos = 0; i < log->len; i++) {
