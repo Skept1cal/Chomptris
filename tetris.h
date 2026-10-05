@@ -33,7 +33,7 @@
 #define MENU_PADDING     14 // How many columns a button or its input field should push text to the right
 
 // Appears at top of main menu
-#define VERSION_STR       "V1.6.1"
+#define VERSION_STR       "V1.6.2"
 #define MENU_TITLE        ("CHOMPTRIS " VERSION_STR)
 
 // Labels for the buttons in main menu
@@ -41,6 +41,7 @@
 #define NAME_LBL          "NAME"
 
 #define SORT_BY_LBL       "SORT BY"
+#define SORT_ORDER_LBL    "SORT ORDER"
 #define TOGGLE_LOG_LBL    "TOGGLE LOG"
 #define VIEW_LOG_LBL      "VIEW LOG"
 #define EXPORT_LOG_LBL    "EXPORT LOG"
@@ -58,6 +59,9 @@
 #define SB_BTN_LVL_LBL    "LEVEL"
 #define SB_BTN_STRT_LBL   "START"
 #define SB_BTN_TETR_LBL   "TETRISES"
+
+#define SOB_DESCEND_LBL   "DESCENDING"
+#define SOB_ASCEND_LBL    "ASCENDING"
 
 #define BTN_ON_LBL        "ON"
 #define BTN_OFF_LBL       "OFF"
@@ -86,14 +90,14 @@
 
 
 
-typedef struct {
+typedef struct Pos {
     int8_t x;
     int8_t y;
 } Pos;
 
 
 
-typedef enum {
+typedef enum SHAPES {
     PIECE_NULL = 0,
     PIECE_I,
     PIECE_O,
@@ -104,7 +108,7 @@ typedef enum {
     PIECE_Z
 } SHAPES;
 
-typedef enum {
+typedef enum MARKERS {
     EMPTY_MRKR = 0, // Used to represent empty fields
 
     CYAN_MRKR,      // Used to represent fields containing cyan blocks
@@ -112,7 +116,7 @@ typedef enum {
     MGNT_MRKR,      // Used to represent fields containing magenta blocks
     GREEN_MRKR,     // Used to represent fields containing green blocks
     RED_MRKR,       // Used to represent fields containing red blocks
-    BLUE_MRKR,      // Used to represent fields containing blue blocks
+    BLUE_MRKR,      // Used to represent fields containing blue blocksA
     GOLD_MRKR,      // Used to represent fields containing gold blocks
 
     LINE_MRKR,      // Used to represent fields that were marked as filled lines
@@ -120,16 +124,16 @@ typedef enum {
 
     BOUND_MRKR,     // Though not used within the arena, this tells writeField() to write bounding characters
 
-    TEXT_MRKR       // Thöugh not used within the arena, this tells writeField() to write characters from text
+    TEXT_MRKR       // Though not used within the arena, this tells writeField() to write characters from text
 } MARKERS;
 
-typedef enum {
+typedef enum SHP_MATR_SZS {
     MATR_SZ_TWO = 2,
     MATR_SZ_THREE,
     MATR_SZ_FOUR,
 } SHP_MATR_SZS;
 
-typedef struct {
+typedef struct Piece {
     Pos     pos; // X/Y positions relative to top-left corner of the piece
     uint8_t shape4[4][4];
     uint8_t shape3[3][3];
@@ -141,11 +145,12 @@ typedef struct {
 
 
 
-typedef enum {
+typedef enum BUTTONS {
     STRT_LVL = 1,
     NAME,
 
     SORT_BY,
+    SORT_ORDER,
     TOGGLE_LOG,
     VIEW_LOG,
     EXPORT_LOG,
@@ -157,14 +162,14 @@ typedef enum {
     QUIT
 } BUTTONS;
 
-typedef enum {
+typedef enum BUTTON_VAL_TYPES {
     BVTYPE_NULL = 0,
     BVTYPE_CHAR,
     BVTYPE_NUM,
     BVTYPE_CYCLE
 } BUTTON_VAL_TYPES;
 
-typedef enum {
+typedef enum SORT_BTN_CYCLES {
     SB_CYCLE_SCORE = 0,
     SB_CYCLE_LINES,
     SB_CYCLE_LEVEL,
@@ -172,25 +177,30 @@ typedef enum {
     SB_CYCLE_TETRIS_CNT
 } SORT_BTN_CYCLES;
 
-typedef enum {
+typedef enum SORT_ORD_BTN_CYCLES {
+    SOB_CYCLE_DESCENDING = 0,
+    SOB_CYCLE_ASCENDING,
+} SORT_ORD_BTN_CYCLES;
+
+typedef enum TOGGLE_LOG_BTN_CYCLES {
     TLB_CYCLE_OFF = 0,
     TLB_CYCLE_ON,
 } TOGGLE_LOG_BTN_CYCLES;
 
-typedef struct {
-    Vector*     chars;                 // Representation of the input-field
-    uint8_t     cycle;                 // Used for buttons of type BVTYPE_CYCLE
-    uint8_t     cycleLen;              // How many cycles there are
+typedef struct Button {
+    Vector*     chars;             // Representation of the input-field
+    uint8_t     cycle;             // Used for buttons of type BVTYPE_CYCLE
+    uint8_t     cycleLen;          // How many cycles there are
     uint8_t     id;
     const char* label;
     uint8_t     valueType;
-    bool        leaveGap;              // If this is true, there will be an extra newline inserted after rendering the button's label
-    void        (*func)(void* player); // Must use void* as the Player type is undefined here
+    bool        leaveGap;          // If this is true, there will be an extra newline inserted after rendering the button's label
+    void        (*onPress)(void*); // Must use void* as the Player type is undefined here
 } Button;
 
 
 
-typedef struct {
+typedef struct Player {
     Piece    currPiece;
     Piece    nextPiece;
     Piece    heldPiece;
@@ -239,6 +249,19 @@ typedef struct {
 
 
 
+#define ERR_FORMAT(format, ...) do {                                                   \
+    clearterm();                                                                       \
+    fprintf(stderr, "\r\n" format "\r\n(%s:%i)\r\n", __VA_ARGS__, __FILE__, __LINE__); \
+    fflush(stderr);                                                                    \
+    abort();                                                                           \
+} while (0)
+#define ERR_NOFORMAT(msg) do {                                         \
+    clearterm();                                                       \
+    fprintf(stderr, "\r\n" msg "\r\n(%s:%i)\r\n", __FILE__, __LINE__); \
+    fflush(stderr);                                                    \
+    abort();                                                           \
+} while (0)
+
 #define MIN(n1, n2) (n1 < n2 ? n1 : n2)
 #define MAX(n1, n2) (n1 > n2 ? n1 : n2)
 
@@ -264,7 +287,7 @@ static inline void suspend(struct timespec* timeout);
 static inline Pos FPOStoAPOS(Piece* p, int row, int col);
 static inline Pos APOStoFPOS(Piece* p, int row, int col);
 
-void strToLower(char* to, size_t toSize, const char* from, size_t fromSize);
+void strToLower(char* to, size_t toSize, char* from, size_t fromSize);
 
 void printHelpText();
 
@@ -282,18 +305,25 @@ static inline void flushstdin(uint8_t* c);
 #endif
 
 Vector* createArena();
-void alternateArena(Vector*  ARENA);
 void     initPlayer(Player* player);
 void          reset(Player* player, Vector* ARENA);
 void     freePlayer(Player* player);
 void           quit(Player* player, Vector* ARENA);
 
 void renderGame(Player* player, Vector* ARENA);
-void gameOver(Player* player, Vector* ARENA, struct timespec* animationTimeout);
-void levelUp(struct timespec* animationTimeout);
+void   gameOver(Player* player, Vector* ARENA, struct timespec* animationTimeout);
+void    levelUp(struct timespec* animationTimeout);
+
 void togglePause(Player* player);
-void toggleHelp(Player* player, Vector* ARENA);
-void   goToMenu(Player* player, Vector* ARENA);
+void  toggleHelp(Player* player, Vector* ARENA);
+void    goToMenu(Player* player, Vector* ARENA);
+
+// O and J pieces don't have left-padding in their matrix representations
+#define PIECE_LEFT_PADDING(type) (type != PIECE_O && type != PIECE_J)
+
+// We must subtract at least 1 as ARENA_COLS / 2 is 1-based, while coordinates are 0-based.
+// For pieces with left-padding, there will be a blank space at the left of their shape matrices, requiring the subtraction of 2 instead of 1.
+#define PIECE_STRT_XPOS(type) ( ARENA_COLS / 2 - ((PIECE_LEFT_PADDING(type)) ? 2 : 1) )
 
 void       regenBag(Player* player);
 void   useNextPiece(Player* player);
@@ -331,6 +361,7 @@ int clearLines(Vector* ARENA);
 
 void renderMenu(Player* player);
 
+static inline void markLogUnsorted(Player* player, Button* btn);
 void    moveCursorUp(Player* player);
 void  moveCursorDown(Player* player);
 void  moveCursorLeft(Player* player);
@@ -347,6 +378,7 @@ void       capUint8Vec(Vector* vec, uint8_t cap);
 
 void updateFromInput(Player* player);
 
+static inline void triggerLogSort(Player* player);
 void     startBtnPressed(void* player);
 void      helpBtnPressed(void* player);
 void      quitBtnPressed(void* player);

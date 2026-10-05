@@ -85,6 +85,7 @@ const char* BUTTON_LABELS[] = {
     NAME_LBL,
 
     SORT_BY_LBL,
+    SORT_ORDER_LBL,
     TOGGLE_LOG_LBL,
     VIEW_LOG_LBL,
     EXPORT_LOG_LBL,
@@ -97,11 +98,11 @@ const char* BUTTON_LABELS[] = {
 };
 
 const uint8_t MAX_INPUT_LENS[] = {
-    [STRT_LVL - 1]=MAX_LVL_INPUT_LEN,
-    [NAME - 1]=MAX_NME_INPUT_LEN
+    [STRT_LVL - 1] = MAX_LVL_INPUT_LEN,
+    [NAME     - 1] = MAX_NME_INPUT_LEN
 };
 
-void (*BUTTON_FUNCTIONS[])(void* player) = {
+void (*BUTTON_FUNCTIONS[])(void*) = {
       [VIEW_LOG - 1] =   viewLogBtnPressed,
     [EXPORT_LOG - 1] = exportLogBtnPressed,
        [CLR_LOG - 1] =  clearLogBtnPressed,
@@ -113,16 +114,21 @@ void (*BUTTON_FUNCTIONS[])(void* player) = {
 
 
 const char* SB_BTN_CYCLE_LBLS[] = {
-    [SB_CYCLE_SCORE]=SB_BTN_SCR_LBL,
-    [SB_CYCLE_LINES]=SB_BTN_LN_LBL,
-    [SB_CYCLE_LEVEL]=SB_BTN_LVL_LBL,
-    [SB_CYCLE_STRT_LVL]=SB_BTN_STRT_LBL,
-    [SB_CYCLE_TETRIS_CNT]=SB_BTN_TETR_LBL
+    [SB_CYCLE_SCORE]      = SB_BTN_SCR_LBL,
+    [SB_CYCLE_LINES]      = SB_BTN_LN_LBL,
+    [SB_CYCLE_LEVEL]      = SB_BTN_LVL_LBL,
+    [SB_CYCLE_STRT_LVL]   = SB_BTN_STRT_LBL,
+    [SB_CYCLE_TETRIS_CNT] = SB_BTN_TETR_LBL
 };
 
 const char* TLB_BTN_CYCLE_LBLS[] = {
-    [TLB_CYCLE_OFF]=BTN_OFF_LBL,
-    [TLB_CYCLE_ON]=BTN_ON_LBL,
+    [TLB_CYCLE_OFF] = BTN_OFF_LBL,
+    [TLB_CYCLE_ON]  = BTN_ON_LBL,
+};
+
+const char* SOB_CYCLE_LBLS[] = {
+    [SOB_CYCLE_DESCENDING] = SOB_DESCEND_LBL,
+    [SOB_CYCLE_ASCENDING]  = SOB_ASCEND_LBL
 };
 
 
@@ -260,14 +266,14 @@ int main(int argc, char** argv) {
 
             #ifdef _WIN32
                 QueryPerformanceCounter(&end);
-                diff = 1000.0 * (end.QuadPart - start.QuadPart) / freq.QuadPart;
+                diff = ((double)1e9) * (end.QuadPart - start.QuadPart) / freq.QuadPart;
             #else
                 end  = clock();
-                diff = 1000.0 * (end - start) / CLOCKS_PER_SEC; // We only end up suspending for as long as there is left from the ~16.67ms window.
+                diff = ((double)1e9) * (end - start) / CLOCKS_PER_SEC; // We only end up suspending for as long as there is left from the ~16.67ms window.
             #endif
 
             long tempNsec = framerate.tv_nsec; // We'll need to reset the framerate after suspension to always compensate for the target itself
-            framerate.tv_nsec -= diff * 1e6; // Convert ms to ns
+            framerate.tv_nsec -= (long)diff;
 
             suspend(&framerate);
 
@@ -345,7 +351,11 @@ static inline void readInput(Player* player, Vector* ARENA, uint8_t* c) {
             } else if (read(STDIN_FILENO, c, 1) == 0) {                  // Checks whether ESC was actually pressed and not something beginning with ESC
                 goToMenu(player, ARENA);
             }
+            // Pressing shift or ctrl AND an arrow key sends bytes which aren't immediately parsed to valid keybinds,
+            // and would later map to completely unrelated keybinds due to the sent bytes,
+            // so we empty the input if there is any.
             if (read(STDIN_FILENO, c, 1) == 1) flushstdin(c);
+
             return;
         }
     #endif
@@ -565,17 +575,17 @@ static inline SHP_MATR_SZS requiredPieceMatrixSize(Piece* p) {
 static inline void suspend(struct timespec* timeout) {
     #ifdef _WIN32
         HANDLE hTimer;
-        if (!(hTimer = CreateWaitableTimerW(NULL, FALSE, NULL))) abort();
+        if (!(hTimer = CreateWaitableTimerW(NULL, FALSE, NULL))) ERR_NOFORMAT("ERROR: WINDOWS: FAILED TO CREATE TIMER");
 
         LARGE_INTEGER dueTime;
         dueTime.QuadPart = -(long long)(timeout->tv_nsec / 100); // Chunks of 100 nanoseconds, negative means relative
 
-        if (!SetWaitableTimer(hTimer, &dueTime, 0, NULL, NULL, FALSE)) abort();
-        if (WaitForSingleObject(hTimer, INFINITE) != WAIT_OBJECT_0) abort();
+        if (!SetWaitableTimer(hTimer, &dueTime, 0, NULL, NULL, FALSE)) ERR_NOFORMAT("ERROR: WINDOWS: FAILED TO SET TIMER");
+        if (WaitForSingleObject(hTimer, INFINITE) != WAIT_OBJECT_0) ERR_NOFORMAT("ERROR: WINDOWS: FAILED TO WAIT TIMER");
 
         CloseHandle(hTimer);
     #else
-        nanosleep((struct timespec*)timeout, NULL);
+        nanosleep(timeout, NULL);
     #endif
 }
 
@@ -610,7 +620,7 @@ bool APOSinpiece(Piece* p, Pos apos) {
 
 
 
-void strToLower(char* to, size_t toSize, const char* from, size_t fromSize) {
+void strToLower(char* to, size_t toSize, char* from, size_t fromSize) {
     for (int i = 0; i < toSize && i < fromSize; i++) {
         to[i] = tolower(from[i]);
     }
@@ -743,13 +753,13 @@ void printHelpText() {
 void resetterm() {
     #ifdef _WIN32
         HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-        if (handle == INVALID_HANDLE_VALUE) abort();
+        if (handle == INVALID_HANDLE_VALUE) ERR_NOFORMAT("ERROR: WINDOWS: INVALID HANDLE");
 
         DWORD mode = 0;
-        if (GetConsoleMode(handle, &mode) == 0) abort();
+        if (GetConsoleMode(handle, &mode) == 0) ERR_NOFORMAT("ERROR: WINDOWS: FAILED TO GET MODE");
 
         mode &= ~ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-        if (SetConsoleMode(handle, mode) == 0) abort();
+        if (SetConsoleMode(handle, mode) == 0) ERR_NOFORMAT("ERROR: WINDOWS: FAILED TO SET MODE");
 
         SetConsoleCtrlHandler(HandlerRoutine, FALSE);
 
@@ -770,13 +780,13 @@ void resetterm() {
 void enableraw() {
     #ifdef _WIN32
         HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-        if (handle == INVALID_HANDLE_VALUE) abort();
+        if (handle == INVALID_HANDLE_VALUE) ERR_NOFORMAT("ERROR: WINDOWS: INVALID HANDLE");
 
         DWORD mode = 0;
-        if (GetConsoleMode(handle, &mode) == 0) abort();
+        if (GetConsoleMode(handle, &mode) == 0) ERR_NOFORMAT("ERROR: WINDOWS: FAILED TO GET MODE");
 
         mode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-        if (SetConsoleMode(handle, mode) == 0) abort();
+        if (SetConsoleMode(handle, mode) == 0) ERR_NOFORMAT("ERROR: WINDOWS: FAILED TO SET MODE");
 
         _setmode(_fileno(stdout), _O_BINARY);
 
@@ -800,7 +810,7 @@ void enableraw() {
 
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &term);
 
-        if (fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK) == -1) abort();
+        if (fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK) == -1) ERR_NOFORMAT("ERROR: POSIX: FAILED TO SET O_NONBLOCK");
     
         fputs("\x1b[?25l", stdout); // Hide cursor
         fflush(stdout);
@@ -850,9 +860,7 @@ static inline void flushstdin(uint8_t* c) {
         goto success;
 
         fail:
-            fputs("\r\nFAILED TO ESTABLISH SIGNAL HANDLER(S)\r\n", stderr);
-            abort();
-        
+            ERR_NOFORMAT("FAILED TO ESTABLISH SIGNAL HANDLER(S)");
         success:
             return;
     }
@@ -929,45 +937,41 @@ void initPlayer(Player* player) {
             .cycleLen = 0,
             .id       = i,
             .label    = BUTTON_LABELS[i],
-            .func     = NULL,
+            .onPress  = BUTTON_FUNCTIONS[i], // This is fine as the array will contain NULL for unused indices/buttons
             .leaveGap = (i == NAME - 1 || i == EXPORT_LOG - 1 || i == CLR_LOG - 1) ? true : false
         };
 
         switch (i + 1) { // Must add 1 as the enum is 1-based
-            case   STRT_LVL: player->buttons[i].valueType =   BVTYPE_NUM; break;
-            case       NAME: player->buttons[i].valueType =  BVTYPE_CHAR; break;
+            case   STRT_LVL: {
+                player->buttons[i].valueType = BVTYPE_NUM;
+                for (int j = 0; j < player->buttons[i].chars->max; j++) {
+                    uint8_t* num = malloc(sizeof(uint8_t));
+                            *num = 0;
+                    vecpush(player->buttons[i].chars, num);
+                }
+                break;
+            }
+            case       NAME: player->buttons[i].valueType = BVTYPE_CHAR; break;
             case    SORT_BY: {
                 player->buttons[i].valueType = BVTYPE_CYCLE;
-                player->buttons[i].cycleLen = SB_CYCLE_TETRIS_CNT + 1; // Must add 1 as the enum is 0-based
+                player->buttons[i].cycleLen  = SB_CYCLE_TETRIS_CNT + 1; // Must add 1 as the enum is 0-based
+                player->buttons[i].cycle     = SB_CYCLE_SCORE;
+                break;
+            }
+            case SORT_ORDER: {
+                player->buttons[i].valueType = BVTYPE_CYCLE;
+                player->buttons[i].cycleLen  = SOB_CYCLE_ASCENDING + 1; // Must add 1 as the enum is 0-based
+                player->buttons[i].cycle     = SOB_CYCLE_DESCENDING;
                 break;
             }
             case TOGGLE_LOG: {
                 player->buttons[i].valueType = BVTYPE_CYCLE;
                 player->buttons[i].cycleLen  = TLB_CYCLE_ON + 1; // Must add 1 as the enum is 0-based
-                player->buttons[i].cycle     = TLB_CYCLE_ON; // Automatically turn logging on
+                player->buttons[i].cycle     = TLB_CYCLE_ON;     // Automatically turn logging on
                 break;
             }
             default: player->buttons[i].valueType = BVTYPE_NULL;
         }
-
-        switch (i + 1) { // Must add 1 as the enum is 1-based
-            case VIEW_LOG:
-            case EXPORT_LOG:
-            case CLR_LOG:
-            case STRT:
-            case HELP:
-            case QUIT: {
-                player->buttons[i].func = BUTTON_FUNCTIONS[i];
-                break;
-            }
-        }
-    }
-
-    // STRT_LVL has a numeric input field, so we initialize it to '00', which can be changed digit-by-digit
-    for (int j = 0; j < MAX_INPUT_LENS[STRT_LVL - 1]; j++) {
-        uint8_t* num = malloc(sizeof(uint8_t));
-                *num = 0;
-        vecpush(player->buttons[STRT_LVL - 1].chars, num); // Must subtract 1 as the enum is 1-based
     }
 
     player->buttonCursor     =  0;
@@ -1109,11 +1113,7 @@ void renderGame(Player* player, Vector* ARENA) {
                         writeField(&toPrint, *(int8_t*)( (Vector*)ARENA->arr[i] )->arr[j], NULL);
                         break;
                     }
-                    default: {
-                        clearterm();
-                        fputs("\r\nERROR: INVALID MARKER IN ARENA\r\n", stdout);
-                        abort();
-                    }
+                    default: ERR_FORMAT("ERROR: INVALID MARKER IN ARENA: %i", *(int8_t*)( (Vector*)ARENA->arr[i] )->arr[j]);
                 }
             }
         }
@@ -1134,14 +1134,11 @@ void renderGame(Player* player, Vector* ARENA) {
             if (shouldOffsetRight) writeField(&toPrint, EMPTY_MRKR, NULL);
 
             for (int j = 0; j < player->nextPiece.MATR_SZ; j++) {
-                switch (getPieceShapeField(&player->nextPiece, i - (NXT_PC_YPOS_STRT + dispYOffset), j)) {
+                uint8_t marker = getPieceShapeField(&player->nextPiece, i - (NXT_PC_YPOS_STRT + dispYOffset), j);
+                switch (marker) {
                     case EMPTY_MRKR: writeField(&toPrint, EMPTY_MRKR, NULL);              break;
                     case          1: writeField(&toPrint, player->nextPiece.color, NULL); break;
-                    default: {
-                        clearterm();
-                        fputs("\r\nERROR: INVALID MARKER IN PIECE\r\n", stderr);
-                        abort();
-                    }
+                    default:         ERR_FORMAT("ERROR: INVALID MARKER IN NEXT PIECE: %i", marker);
                 }
             }
 
@@ -1154,14 +1151,11 @@ void renderGame(Player* player, Vector* ARENA) {
             if (shouldOffsetRight) writeField(&toPrint, EMPTY_MRKR, NULL);
 
             for (int j = 0; j < player->heldPiece.MATR_SZ; j++) {
-                switch (getPieceShapeField(&player->heldPiece, i - (HLD_PC_YPOS_STRT + dispYOffset), j)) {
+                uint8_t marker = getPieceShapeField(&player->heldPiece, i - (HLD_PC_YPOS_STRT + dispYOffset), j);
+                switch (marker) {
                     case EMPTY_MRKR: writeField(&toPrint, EMPTY_MRKR, NULL);              break;
                     case          1: writeField(&toPrint, player->heldPiece.color, NULL); break;
-                    default: {
-                        clearterm();
-                        fputs("\r\nERROR: INVALID MARKER IN PIECE\r\n", stderr);
-                        abort();
-                    }
+                    default:         ERR_FORMAT("ERROR: INVALID MARKER IN HELD PIECE: %i", marker);
                 }
             }
 
@@ -1282,6 +1276,8 @@ void levelUp(struct timespec* animationTimeout) {
     clearterm();
 }
 
+
+
 void togglePause(Player* player) {
     if (player->gameOver) return;
 
@@ -1330,7 +1326,7 @@ void regenBag(Player* player) {
 
     Vector* remaining = crtvec(PIECE_Z, DTYPE_NORMAL, NULL);
 
-    for (int p = 1; p < PIECE_Z + 1; p++) {
+    for (int p = PIECE_I; p <= PIECE_Z; p++) {
         uint8_t* ind = malloc(sizeof(uint8_t));
                 *ind = p;
         vecpush(remaining, ind);
@@ -1373,11 +1369,7 @@ void regenBag(Player* player) {
 
         bagPiece->color = (MARKERS)bagPiece->type;
         bagPiece->pos = (Pos){
-            /*
-            We must subtract at least 1 as ARENA_COLS / 2 is 1-based, while coordinates are 0-based.
-            For non-O/J pieces, there will be a blank space at the left of their shape matrices, requiring the subtraction of 2 instead of 1.
-            */
-            .x = ARENA_COLS / 2 - ((bagPiece->type == PIECE_O || bagPiece->type == PIECE_J) ? 1 : 2),
+            .x = PIECE_STRT_XPOS(bagPiece->type),
             .y = 0
         };
 
@@ -1411,11 +1403,7 @@ void initPiece(Piece* p) {
     #endif
 
     p->pos = (Pos){
-        /*
-        We must subtract at least 1 as ARENA_COLS / 2 is 1-based, while coordinates are 0-based.
-        For non-O/J pieces, there will be a blank space at the left of their shape matrices, requiring the subtraction of 2 instead of 1.
-        */
-        .x = ARENA_COLS / 2 - ((p->type == PIECE_O || p->type == PIECE_J) ? 1 : 2),
+        .x = PIECE_STRT_XPOS(p->type),
         .y = 0
     };
 
@@ -1744,8 +1732,6 @@ void renderMenu(Player* player) {
                     if (highlightChar) {
                         fputs("\x1b[0m", stdout);
                     }
-
-                    fflush(stdout);
                 }
 
                 break;
@@ -1755,17 +1741,16 @@ void renderMenu(Player* player) {
 
                 if (highLightCycle) {
                     fputs("\x1b[48;5;15;38;5;16m", stdout);
-                    fflush(stdout);
                 }
 
                 switch (btn->id + 1) { // Must add 1 as ids are 0-based while the enum is 1-based
-                    case    SORT_BY: fputs(SB_BTN_CYCLE_LBLS[btn->cycle], stdout);  break;
+                    case    SORT_BY: fputs( SB_BTN_CYCLE_LBLS[btn->cycle], stdout); break;
                     case TOGGLE_LOG: fputs(TLB_BTN_CYCLE_LBLS[btn->cycle], stdout); break;
+                    case SORT_ORDER: fputs(    SOB_CYCLE_LBLS[btn->cycle], stdout); break;
                 }
 
                 if (highLightCycle) {
                     fputs("\x1b[0m", stdout);
-                    fflush(stdout);
                 }
 
                 break;
@@ -1779,8 +1764,9 @@ void renderMenu(Player* player) {
             case   BVTYPE_NUM: padding = MENU_PADDING - btn->chars->len; break;
             case BVTYPE_CYCLE: {
                 switch (btn->id + 1) {
-                    case    SORT_BY: padding = MENU_PADDING - strlen(SB_BTN_CYCLE_LBLS[btn->cycle]);  break;
+                    case    SORT_BY: padding = MENU_PADDING - strlen( SB_BTN_CYCLE_LBLS[btn->cycle]); break;
                     case TOGGLE_LOG: padding = MENU_PADDING - strlen(TLB_BTN_CYCLE_LBLS[btn->cycle]); break;
+                    case SORT_ORDER: padding = MENU_PADDING - strlen(    SOB_CYCLE_LBLS[btn->cycle]); break;
                 }
             }
         }
@@ -1794,6 +1780,12 @@ void renderMenu(Player* player) {
 }
 
 
+
+static inline void markLogUnsorted(Player* player, Button* btn) {
+    if (btn->id == SORT_BY - 1 || btn->id == SORT_ORDER - 1) {
+        player->logUnsorted = true;
+    }
+}
 
 void moveCursorUp(Player* player) {
     if (player->buttonCursor > 0 && player->selected == -1) {
@@ -1822,9 +1814,7 @@ void moveCursorLeft(Player* player) {
         player->inputCursor--;
     }
 
-    if (btn->id == SORT_BY - 1) {
-        player->logUnsorted = true;
-    }
+    markLogUnsorted(player, btn);
 
     renderMenu(player);
 }
@@ -1855,9 +1845,7 @@ void moveCursorRight(Player* player) {
         player->inputCursor++;
     }
 
-    if (btn->id == SORT_BY - 1) {
-        player->logUnsorted = true;
-    }
+    markLogUnsorted(player, btn);
 
     renderMenu(player);
 }
@@ -1962,6 +1950,17 @@ void updateFromInput(Player* player) {
 
 
 
+static inline void triggerLogSort(Player* player) {
+    if (player->logUnsorted) {
+        sortLogVec(
+            player->log,
+            player->buttons[SORT_BY - 1].cycle,
+            (player->buttons[SORT_ORDER - 1].cycle == SOB_CYCLE_DESCENDING) ? true : false
+        );
+        player->logUnsorted = false;
+    }
+}
+
 void startBtnPressed(void* player) {
     Player* _player = player;
 
@@ -1982,10 +1981,7 @@ void quitBtnPressed(void* player) {
 void viewLogBtnPressed(void* player) {
     Player* _player = player;
 
-    if (_player->logUnsorted) {
-        sortLogVec(_player->log, _player->buttons[SORT_BY - 1].cycle);
-        _player->logUnsorted = false;
-    }
+    triggerLogSort(_player);
     printLog(_player->log);
 
     _player->logOpen = true;
@@ -1994,10 +1990,7 @@ void viewLogBtnPressed(void* player) {
 void exportLogBtnPressed(void* player) {
     Player* _player = player;
 
-    if (_player->logUnsorted) {
-        sortLogVec(_player->log, _player->buttons[SORT_BY - 1].cycle);
-        _player->logUnsorted = false;
-    }
+    triggerLogSort(_player);
     exportLog(_player->log);
 }
 
@@ -2009,8 +2002,8 @@ void clearLogBtnPressed(void* player) {
 
 
 void executeSelected(Player* player) {
-    if (player->selected != -1 && player->buttons[player->selected].func) {
-        player->buttons[player->selected].func(player);
+    if (player->selected != -1 && player->buttons[player->selected].onPress) {
+        player->buttons[player->selected].onPress(player);
         player->selected = -1;
 
         if (!player->helpTextOpen && !player->logOpen && player->mainMenuOpen) renderMenu(player);

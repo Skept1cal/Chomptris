@@ -286,12 +286,12 @@ void readLog(Vector* log) {
 
 
 
-void sortLogVec(Vector* log, SORT_TYPES sortType) {
+void sortLogVec(Vector* log, SORT_TYPES sortType, bool descending) {
     for (int i = 0; i < log->len; i++) {
         if (!log->arr[i]) continue;
 
-        LogRow* highest = log->arr[i];
-        uint32_t highestInd = i;
+        LogRow*  highestLowest    = log->arr[i];
+        uint32_t highestLowestInd = i;
         for (int j = i; j < log->len; j++) {
             if (!log->arr[j]) continue;
 
@@ -301,22 +301,22 @@ void sortLogVec(Vector* log, SORT_TYPES sortType) {
             LogRow* currRow = log->arr[j];
 
             switch (sortType) {
-                case SRT_TYPE_SCORE:   currVal = currRow->score;       compVal = highest->score;       break;
-                case SRT_TYPE_LINES:   currVal = currRow->lines;       compVal = highest->lines;       break;
-                case SRT_TYPE_LEVEL:   currVal = currRow->level;       compVal = highest->level;       break;
-                case SRT_TYPE_STRTLVL: currVal = currRow->startLevel;  compVal = highest->startLevel;  break;
-                case SRT_TYPE_TETRCNT: currVal = currRow->tetrisCount; compVal = highest->tetrisCount; break;
+                case SRT_TYPE_SCORE:   currVal = currRow->score;       compVal = highestLowest->score;       break;
+                case SRT_TYPE_LINES:   currVal = currRow->lines;       compVal = highestLowest->lines;       break;
+                case SRT_TYPE_LEVEL:   currVal = currRow->level;       compVal = highestLowest->level;       break;
+                case SRT_TYPE_STRTLVL: currVal = currRow->startLevel;  compVal = highestLowest->startLevel;  break;
+                case SRT_TYPE_TETRCNT: currVal = currRow->tetrisCount; compVal = highestLowest->tetrisCount; break;
             }
 
-            if (currVal >= compVal) {
-                highest = currRow;
-                highestInd = j;
+            if ((descending) ? (currVal >= compVal) : (currVal <= compVal)) {
+                highestLowest = currRow;
+                highestLowestInd = j;
             }
         }
 
         LogRow* temp = log->arr[i];
-        log->arr[i] = highest;
-        log->arr[highestInd] = temp;
+        log->arr[i] = highestLowest;
+        log->arr[highestLowestInd] = temp;
     }
 }
 
