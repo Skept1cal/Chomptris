@@ -187,11 +187,7 @@ int main(int argc, char** argv) {
             }
 
             readInput(&player, ARENA, &c);
-            /*
-            if (player.mainMenuOpen && !player.helpTextOpen) {
-                executeSelected(&player);
-            }
-            */
+
             if (player.paused || player.helpTextOpen || player.mainMenuOpen) {
                 suspend(&framerate);
                 continue;
@@ -850,6 +846,7 @@ static inline void flushstdin(uint8_t* c) {
         while (read(STDIN_FILENO, c, 1) == 1);
     #endif
 }
+
 
 
 #ifndef _WIN32

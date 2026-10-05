@@ -223,7 +223,11 @@ void readLog(Vector* log) {
     size_t bytes = ftell(f);
     rewind(f);
 
-    uint8_t txt[bytes];
+    uint8_t* txt = malloc(bytes);
+    if (!txt) {
+        fclose(f);
+        return;
+    }
 
     fread(txt, sizeof(*txt), bytes, f);
     int keyPos = 0;
