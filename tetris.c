@@ -139,7 +139,7 @@ const char* SOB_CYCLE_LBLS[] = {
 
 int main(int argc, char** argv) {
     if (argc == 1) {
-        Vector* ARENA = createArena();
+        HVector* ARENA = createArena();
 
         Player player;
         initPlayer(&player);
@@ -276,6 +276,8 @@ int main(int argc, char** argv) {
             long tempNsec = framerate.tv_nsec; // We'll need to reset the framerate after suspension to always compensate for the target itself
             framerate.tv_nsec -= (long)diff;
 
+            printf("\r\nDiff: %lfms\r\n", ((double)diff) / 1e6);
+
             suspend(&framerate);
 
             framerate.tv_nsec = tempNsec;
@@ -318,7 +320,7 @@ int main(int argc, char** argv) {
 
 
 
-static inline void readInput(Player* player, Vector* ARENA, uint8_t* c) {
+static inline void readInput(Player* player, HVector* ARENA, uint8_t* c) {
     #ifdef _WIN32
         if (!_kbhit()) return;
     #else
@@ -892,19 +894,12 @@ static inline void flushstdin(uint8_t* c) {
 
 
 // Creates and returns a vector representing the play-area (arena)
-Vector* createArena() {
-    Vector* ARENA = crtvec(ARENA_ROWS, DTYPE_VECTOR, NULL);
+HVector* createArena() {
+    HVector* ARENA = crthvec(ARENA_ROWS, HVEC_TYPE_NORMAL, NULL);
 
     for (int i = 0; i < ARENA_ROWS; i++) {
-        Vector* row = crtvec(ARENA_COLS, DTYPE_NORMAL, NULL);
-
-        for (int j = 0; j < ARENA_COLS; j++) {
-            int8_t* field = malloc(sizeof(int8_t));
-            *field = EMPTY_MRKR;
-            vecpush(row, field);
-        }
-
-        vecpush(ARENA, row);
+        int8_t* row = calloc(ARENA_COLS, sizeof(int8_t));
+        hvecpush(ARENA, row);
     }
 
     return ARENA;
@@ -946,7 +941,7 @@ void initPlayer(Player* player) {
 
     for (int i = 0; i < QUIT; i++) {
         player->buttons[i] = (Button){
-            .chars    = (i < SORT_BY) ? crtvec(MAX_INPUT_LENS[i], DTYPE_NORMAL, NULL) : NULL, // Only STRT_LVL and NAME need input fields
+            .chars    = (i < SORT_BY) ? crtsvec(MAX_INPUT_LENS[i], sizeof(uint8_t), SVEC_TYPE_NORMAL, NULL) : NULL, // Only STRT_LVL and NAME need input fields
             .cycle    = 0,
             .cycleLen = 0,
             .id       = i,
@@ -959,9 +954,8 @@ void initPlayer(Player* player) {
             case   STRT_LVL: {
                 player->buttons[i].valueType = BVTYPE_NUM;
                 for (int j = 0; j < player->buttons[i].chars->max; j++) {
-                    uint8_t* num = malloc(sizeof(uint8_t));
-                            *num = 0;
-                    vecpush(player->buttons[i].chars, num);
+                    uint8_t num = 0;
+                    svecpush(player->buttons[i].chars, &num);
                 }
                 break;
             }
@@ -1006,10 +1000,10 @@ void initPlayer(Player* player) {
     player->logUnsorted      = true;
 }
 
-void reset(Player* player, Vector* ARENA) {
+void reset(Player* player, HVector* ARENA) {
     for (int i = 0; i < ARENA_ROWS; i++) {
         for (int j = 0; j < ARENA_COLS; j++) {
-            *(int8_t*)( (Vector*)ARENA->arr[i] )->arr[j] = 0;
+            ((int8_t*)ARENA->arr[i])[j] = 0;
         }
     }
 
@@ -1076,19 +1070,19 @@ void reset(Player* player, Vector* ARENA) {
 
 void freePlayer(Player* player) {
     for (int i = 0; i < sizeof(player->buttons) / sizeof(player->buttons[0]); i++) {
-        freevec(player->buttons[i].chars);
+        freesvec(player->buttons[i].chars);
     }
-    freevec(player->log);
+    freehvec(player->log);
 }
 
-void quit(Player* player, Vector* ARENA) {
-    freevec(ARENA);
+void quit(Player* player, HVector* ARENA) {
+    freehvec(ARENA);
     freePlayer(player);
 }
 
 
 
-void renderGame(Player* player, Vector* ARENA) {
+void renderGame(Player* player, HVector* ARENA) {
     // Must add 1 to rows to include bottom bound;
     // Must add 3 to cols to include left and right bounds + CRLF ("\r\n");
     // Must add NXT_PC_XPOS_STRT + MATR_SZ_FOUR to cols so we fit the padding AND the max amount of columns needed to display the next/held piece.
@@ -1104,13 +1098,15 @@ void renderGame(Player* player, Vector* ARENA) {
     char* toPrintBegin = toPrint; // Needed to access the beginning of the buffer after shifting the original pointer
 
     for (int i = 0; i < ARENA_ROWS; i++) {
+        int8_t* ARENA_ROW = ARENA->arr[i];
+
         writeField(&toPrint, BOUND_MRKR, NULL);
 
         for (int j = 0; j < ARENA_COLS; j++) {
-            if (APOSinpiece(&player->currPiece, (Pos){.x = j, .y = i} ) && *(int8_t*)( (Vector*)ARENA->arr[i] )->arr[j] != GAME_OVER_MRKR) {
+            if (APOSinpiece(&player->currPiece, (Pos){.x = j, .y = i} ) && ARENA_ROW[j] != GAME_OVER_MRKR) {
                 writeField(&toPrint, player->currPiece.color, NULL);
             } else {
-                switch( *(int8_t*)( (Vector*)ARENA->arr[i] )->arr[j] ) {
+                switch(ARENA_ROW[j]) {
                     case EMPTY_MRKR:
 
                     case CYAN_MRKR:
@@ -1124,10 +1120,10 @@ void renderGame(Player* player, Vector* ARENA) {
                     case LINE_MRKR:
                     case GAME_OVER_MRKR: {
                         // If we found a marker, it's enough to use the field as the marker
-                        writeField(&toPrint, *(int8_t*)( (Vector*)ARENA->arr[i] )->arr[j], NULL);
+                        writeField(&toPrint, ARENA_ROW[j], NULL);
                         break;
                     }
-                    default: ERR_FORMAT("ERROR: INVALID MARKER IN ARENA: %i", *(int8_t*)( (Vector*)ARENA->arr[i] )->arr[j]);
+                    default: ERR_FORMAT("ERROR: INVALID MARKER IN ARENA: %i", ARENA_ROW[j]);
                 }
             }
         }
@@ -1225,7 +1221,7 @@ void renderGame(Player* player, Vector* ARENA) {
     free(toPrintBegin);
 }
 
-void gameOver(Player* player, Vector* ARENA, struct timespec* animationTimeout) {
+void gameOver(Player* player, HVector* ARENA, struct timespec* animationTimeout) {
     clearterm();
     renderGame(player, ARENA);
 
@@ -1237,8 +1233,9 @@ void gameOver(Player* player, Vector* ARENA, struct timespec* animationTimeout) 
     };
 
     for (int i = 0; i < ARENA_ROWS; i++) {
+        int8_t* ARENA_ROW = ARENA->arr[i];
         for (int j = 0; j < ARENA_COLS; j++) {
-            *(int8_t*)( (Vector*)ARENA->arr[i] )->arr[j] = GAME_OVER_MRKR;
+            ARENA_ROW[j] = GAME_OVER_MRKR;
         }
 
         suspend(&timeout);
@@ -1264,8 +1261,7 @@ void gameOver(Player* player, Vector* ARENA, struct timespec* animationTimeout) 
 
 
     if (player->buttons[TOGGLE_LOG - 1].cycle) {
-        LogRow* logRow = malloc(sizeof(LogRow));
-
+        LogRow* logRow = calloc(1, sizeof(LogRow));
         *logRow = (LogRow){
             .name        = strdup((player->name[0]) ? player->name : DFLT_NAME),
             .score       = player->score,
@@ -1275,7 +1271,7 @@ void gameOver(Player* player, Vector* ARENA, struct timespec* animationTimeout) 
             .tetrisCount = player->tetrisCount
         };
 
-        vecpush(player->log, logRow);
+        hvecpush(player->log, logRow);
 
         writeLog(player->log);
     }
@@ -1306,7 +1302,7 @@ void togglePause(Player* player) {
     }
 }
 
-void toggleHelp(Player* player, Vector* ARENA) {
+void toggleHelp(Player* player, HVector* ARENA) {
     player->helpTextOpen = !player->helpTextOpen;
 
     if (player->helpTextOpen) printHelpText();
@@ -1324,7 +1320,7 @@ void toggleHelp(Player* player, Vector* ARENA) {
     }
 }
 
-void goToMenu(Player* player, Vector* ARENA) {
+void goToMenu(Player* player, HVector* ARENA) {
     reset(player, ARENA);
     player->mainMenuOpen = true;
     player->confirmationOpen = false;
@@ -1339,12 +1335,10 @@ void regenBag(Player* player) {
     // and we select a random one to push to the bag, removing the chosen index each time,
     // until there are no indices left.
 
-    Vector* remaining = crtvec(PIECE_Z, DTYPE_NORMAL, NULL);
+    SVector* remaining = crtsvec(PIECE_Z, sizeof(uint8_t), SVEC_TYPE_NORMAL, NULL);
 
     for (int p = PIECE_I; p <= PIECE_Z; p++) {
-        uint8_t* ind = malloc(sizeof(uint8_t));
-                *ind = p;
-        vecpush(remaining, ind);
+        svecpush(remaining, &p);
     }
 
     while (remaining->len >= 1) {
@@ -1359,7 +1353,7 @@ void regenBag(Player* player) {
             uint32_t randInd = arc4random_uniform((uint32_t)remaining->len);
         #endif
 
-        uint8_t shapeInd = *(uint8_t*)remaining->arr[randInd];
+        uint8_t shapeInd = ((uint8_t*)remaining->arr)[randInd];
 
         bagPiece->type = shapeInd;
 
@@ -1389,10 +1383,10 @@ void regenBag(Player* player) {
         };
 
         player->bagLen++;
-        vecrmv(remaining, randInd);
+        svecrmv(remaining, randInd);
     }
 
-    freevec(remaining);
+    freesvec(remaining);
 }
 
 void useNextPiece(Player* player) {
@@ -1448,14 +1442,17 @@ void setPieceToNull(Piece* p) {
 
 
 
-bool pieceCollides(Piece* p, Vector* ARENA) {
+bool pieceCollides(Piece* p, HVector* ARENA) {
     for (int i = 0; i < p->MATR_SZ; i++) {
         for (int j = 0; j < p->MATR_SZ; j++) {
             if (!getPieceShapeField(p, i, j)) continue;
 
             Pos APOS = FPOStoAPOS(p, i, j);
+
             if ( APOS.x < 0 || APOS.x >= ARENA_COLS || APOS.y < 0 || APOS.y >= ARENA_ROWS ) return true;
-            if ( *(int8_t*)( (Vector*)ARENA->arr[APOS.y] )->arr[APOS.x] ) return true;
+
+            int8_t* ARENA_ROW = ARENA->arr[APOS.y];
+            if (ARENA_ROW[APOS.x]) return true;
         }
     }
 
@@ -1464,36 +1461,36 @@ bool pieceCollides(Piece* p, Vector* ARENA) {
 
 
 
-bool canMoveDown(Piece* p, Vector* ARENA) {
+bool canMoveDown(Piece* p, HVector* ARENA) {
     p->pos.y++;
     bool collides = pieceCollides(p, ARENA);
     p->pos.y--;
     return !collides; // pieceCollides() returns true if there is collision, so we invert to check for no collision
 }
 
-bool canMoveRight(Piece* p, Vector* ARENA) {
+bool canMoveRight(Piece* p, HVector* ARENA) {
     p->pos.x++;
     bool collides = pieceCollides(p, ARENA);
     p->pos.x--;
     return !collides;
 }
 
-bool canMoveLeft(Piece* p, Vector* ARENA) {
+bool canMoveLeft(Piece* p, HVector* ARENA) {
     p->pos.x--;
     bool collides = pieceCollides(p, ARENA);
     p->pos.x++;
     return !collides;
 }
 
-static inline void moveDown(Piece* p, Vector* ARENA) {
+static inline void moveDown(Piece* p, HVector* ARENA) {
     if (canMoveDown(p, ARENA)) p->pos.y++;
 }
 
-static inline void moveRight(Piece* p, Vector* ARENA) {
+static inline void moveRight(Piece* p, HVector* ARENA) {
     if (canMoveRight(p, ARENA)) p->pos.x++;
 }
 
-static inline void moveLeft(Piece* p, Vector* ARENA) {
+static inline void moveLeft(Piece* p, HVector* ARENA) {
     if (canMoveLeft(p, ARENA)) p->pos.x--;
 }
 
@@ -1538,7 +1535,7 @@ void rotCCW(Piece *p) {
 
 
 
-bool wallKick(Piece* p, Vector* ARENA) {
+bool wallKick(Piece* p, HVector* ARENA) {
     // We test different pushes (including no push at all),
     // and if any succeed the function found a valid spot and thus the rotation is valid.
 
@@ -1557,19 +1554,19 @@ bool wallKick(Piece* p, Vector* ARENA) {
 
 
 
-bool canRotateCW(Piece* p, Vector* ARENA) {
+bool canRotateCW(Piece* p, HVector* ARENA) {
     Piece copy = *p;
     rotCW(&copy);
     return wallKick(&copy, ARENA);
 }
 
-bool canRotateCCW(Piece* p, Vector* ARENA) {
+bool canRotateCCW(Piece* p, HVector* ARENA) {
     Piece copy = *p;
     rotCCW(&copy);
     return wallKick(&copy, ARENA);
 }
 
-void rotateCW(Piece* p, Vector* ARENA) {
+void rotateCW(Piece* p, HVector* ARENA) {
     // Rotating the O-piece doesn't do anything, so we skip it
     if (p->type == PIECE_O) return;
 
@@ -1579,7 +1576,7 @@ void rotateCW(Piece* p, Vector* ARENA) {
     }
 }
 
-void rotateCCW(Piece* p, Vector* ARENA) {
+void rotateCCW(Piece* p, HVector* ARENA) {
     // Rotating the O-piece doesn't do anything, so we skip it
     if (p->type == PIECE_O) return;
 
@@ -1648,32 +1645,36 @@ void swapHeldPiece(Player* player) {
 
 
 
-void engrainPiece(Piece* p, Vector* ARENA) {
+void engrainPiece(Piece* p, HVector* ARENA) {
     for (int i = 0; i < p->MATR_SZ; i++) {
         for (int j = 0; j < p->MATR_SZ; j++) {
             if (!getPieceShapeField(p, i, j)) continue;
 
             Pos APOS = FPOStoAPOS(p, i, j);
-            *(int8_t*)( (Vector*)ARENA->arr[APOS.y] )->arr[APOS.x] = p->color;
+
+            int8_t* ARENA_ROW = ARENA->arr[APOS.y];
+            ARENA_ROW[APOS.x] = p->color;
         }
     }
 }
 
 
 
-bool markLines(Vector* ARENA) {
+bool markLines(HVector* ARENA) {
     bool foundLines = false;
 
     for (int i = 0; i < ARENA_ROWS; i++) {
-        if ( !*(int8_t*)( (Vector*)ARENA->arr[i] )->arr[0] ) continue;
+        int8_t* ARENA_ROW = ARENA->arr[i];
+
+        if ( !ARENA_ROW[0] ) continue;
 
         int j = 0;
         for (; j < ARENA_COLS; j++) {
-            if ( !*(int8_t*)( (Vector*)ARENA->arr[i] )->arr[j] ) break;
+            if ( !ARENA_ROW[j] ) break;
         }
         if (j >= ARENA_COLS) {
             for (int c = 0; c < ARENA_COLS; c++) {
-                *(int8_t*)( (Vector*)ARENA->arr[i] )->arr[c] = LINE_MRKR;
+                ARENA_ROW[c] = LINE_MRKR;
             }
             foundLines = true;
         }
@@ -1682,20 +1683,17 @@ bool markLines(Vector* ARENA) {
     return foundLines;
 }
 
-int clearLines(Vector* ARENA) {
+int clearLines(HVector* ARENA) {
     int8_t lines = 0;
 
     for (int i = 0; i < ARENA_ROWS; i++) {
-        if ( *(int8_t*)( (Vector*)ARENA->arr[i] )->arr[0] == LINE_MRKR ) {
-            Vector* row = crtvec(ARENA_COLS, DTYPE_NORMAL, NULL);
-            for (int c = 0; c < ARENA_COLS; c++) {
-                int8_t* field = malloc(sizeof(int8_t));
-                       *field = EMPTY_MRKR;
-                vecpush(row, field);
-            }
+        int8_t* ARENA_ROW = ARENA->arr[i];
 
-                vecrmv(ARENA, i);
-            vecinsrtsf(ARENA, 0, row);
+        if (ARENA_ROW[0] == LINE_MRKR) {
+            int8_t* row = calloc(ARENA_COLS, sizeof(int8_t));
+
+            hvecrmv(ARENA, i);
+            hvecinsrtsf(ARENA, 0, row);
 
             lines++;
         }
@@ -1738,8 +1736,9 @@ void renderMenu(Player* player) {
                         case  BVTYPE_NUM: format = "%i"; break;
                     }
 
-                    if (j < btn->chars->len && btn->chars->arr[j]) {
-                        printf(format, *(uint8_t*)btn->chars->arr[j]);
+                    uint8_t* arr = btn->chars->arr;
+                    if (j < btn->chars->len) {
+                        printf(format, arr[j]);
                     } else {
                         fputc(' ', stdout);
                     }
@@ -1838,16 +1837,16 @@ void moveCursorRight(Player* player) {
     // Only buttons up to the sort-by button (inclusive) have input fields of some kind
     if (player->selected == -1) return;
 
-    Vector* vec = player->buttons[player->selected].chars;
+    SVector* svec = player->buttons[player->selected].chars;
     Button* btn = &player->buttons[player->selected];
 
     uint8_t rightBound = 0;
 
     switch (btn->valueType) {
-        case  BVTYPE_CHAR: rightBound = MIN(vec->len, vec->max); break;
+        case  BVTYPE_CHAR: rightBound = MIN(svec->len, svec->max); break;
         case   BVTYPE_NUM: {
             // If the input field is of a numeric type, we don't want the cursor to go past the length as no appending is needed
-            rightBound = MIN(vec->len - 1, vec->max);
+            rightBound = MIN(svec->len - 1, svec->max);
             break;
         }
         case BVTYPE_CYCLE: break; // Cyclic buttons don't use the input cursor, so we don't need a bound
@@ -1872,7 +1871,8 @@ void selectBtn(Player* player) {
         player->selected = -1;
         renderMenu(player);
     } else {
-        player->selected = player->buttonCursor;
+        player->selected    = player->buttonCursor;
+        player->inputCursor = 0;
 
         if (player->buttons[player->selected].onPress) {
             player->buttons[player->selected].onPress(player);
@@ -1902,20 +1902,16 @@ void selectBtn(Player* player) {
             // is actually shown to be selected.
             renderMenu(player);
         }
-
-        player->inputCursor = 0;
     }
 }
 
 
 
 void writeCharToInput(Player* player, char c) {
-    Vector* vec = player->buttons[player->selected].chars;
-    if (vec->len == vec->max) return;
+    SVector* svec = player->buttons[player->selected].chars;
+    if (svec->len == svec->max) return;
 
-    char* ch = malloc(sizeof(char));
-         *ch = c;
-    vecinsrtsf(vec, player->inputCursor, ch);
+    svecinsrtsf(svec, player->inputCursor, &c);
 
     updateFromInput(player);
     moveCursorRight(player);
@@ -1925,19 +1921,18 @@ void writeCharToInput(Player* player, char c) {
 }
 
 void writeNumToInput(Player* player, uint8_t nc) {
-    Vector* vec = player->buttons[player->selected].chars;
-    
-    *(uint8_t*)vec->arr[player->inputCursor] = nc;
+    SVector* svec = player->buttons[player->selected].chars;
+    ((uint8_t*)svec->arr)[player->inputCursor] = nc;
 
     updateFromInput(player);
     renderMenu(player);
 }
 
 void removeCharFromInput(Player* player) {
-    Vector* vec = player->buttons[player->selected].chars;
-    if (vec->len == 0 || player->inputCursor < 1) return;
+    SVector* svec = player->buttons[player->selected].chars;
+    if (svec->len == 0 || player->inputCursor < 1) return;
 
-    vecrmv(vec, player->inputCursor - 1);
+    svecrmv(svec, player->inputCursor - 1);
 
     updateFromInput(player);
     moveCursorLeft(player);
@@ -1946,17 +1941,17 @@ void removeCharFromInput(Player* player) {
     renderMenu(player);
 }
 
-uint32_t uint8VecToInt(Vector* vec) {
+uint32_t uint8SVecToInt(SVector* vec) {
     uint32_t num = 0;
     for (int i = 0; i < vec->len; i++) {
-        num = num * 10 + *(uint8_t*)vec->arr[i];
+        num = num * 10 + ((uint8_t*)vec->arr)[i];
     }
     return num;
 }
 
-void capUint8Vec(Vector* vec, uint8_t cap) {
+void capUint8SVec(SVector* vec, uint8_t cap) {
     for (int i = vec->len - 1; i >= 0; i--) {
-        *(uint8_t*)vec->arr[i] = cap % 10;
+        ((uint8_t*)vec->arr)[i] = cap % 10;
         cap /= 10;
     }
 }
@@ -1965,13 +1960,13 @@ void capUint8Vec(Vector* vec, uint8_t cap) {
 
 void updateFromInput(Player* player) {
     for (int i = 0; i < sizeof(player->buttons) / sizeof(player->buttons[0]); i++) {
-        Vector* vec = player->buttons[i].chars;
+        SVector* svec = player->buttons[i].chars;
         switch (player->buttons[i].id + 1) {
             case STRT_LVL: {
-                uint32_t num = uint8VecToInt(vec);
+                uint32_t num = uint8SVecToInt(svec);
                 if (num >= MAX_STARTING_LVL) {
                     num  = MAX_STARTING_LVL;
-                    capUint8Vec(vec, num);
+                    capUint8SVec(svec, num);
                 }
                 player->startLevel = num;
                 break;
@@ -1984,8 +1979,8 @@ void updateFromInput(Player* player) {
                 }
 
                 int j = 0;
-                for (; vec->arr[j] != NULL && j < vec->max; j++) {
-                    player->name[j] = *(uint8_t*)vec->arr[j];
+                for (; ((uint8_t*)svec->arr)[j] && j < svec->max; j++) {
+                    player->name[j] = ((uint8_t*)svec->arr)[j];
                 }
                 player->name[j] = '\0';
                 break;
@@ -2057,7 +2052,7 @@ void clearLogBtnPressed(void* player) {
 
 
 
-void upPressed(Player* player, Vector* ARENA) {
+void upPressed(Player* player, HVector* ARENA) {
     if (!player->mainMenuOpen) {
         rotateCW(&player->currPiece, ARENA);
     } else {
@@ -2065,7 +2060,7 @@ void upPressed(Player* player, Vector* ARENA) {
     }
 }
 
-void downPressed(Player* player, Vector* ARENA) {
+void downPressed(Player* player, HVector* ARENA) {
     if (!player->mainMenuOpen) {
         moveDown(&player->currPiece, ARENA);
     } else {
@@ -2073,7 +2068,7 @@ void downPressed(Player* player, Vector* ARENA) {
     }
 }
 
-void rightPressed(Player* player, Vector* ARENA) {
+void rightPressed(Player* player, HVector* ARENA) {
     if (!player->mainMenuOpen) {
         moveRight(&player->currPiece, ARENA);
     } else {
@@ -2081,7 +2076,7 @@ void rightPressed(Player* player, Vector* ARENA) {
     }
 }
 
-void leftPressed(Player* player, Vector* ARENA) {
+void leftPressed(Player* player, HVector* ARENA) {
     if (!player->mainMenuOpen) {
         moveLeft(&player->currPiece, ARENA);
     } else {

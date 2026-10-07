@@ -2,7 +2,8 @@
 #define HIGHSCORE_H
 
 #include <stdint.h>
-#include "vector/vector.h"
+#include "tetris.h"
+#define AR ARENA_ROWS // Suppresses unused header warning (the header includes the vector library, which is why we include it here)
 #include <stdbool.h>
 
 #define DFLT_NAME "None"
@@ -31,17 +32,17 @@ typedef struct {
 
 
 
-Vector* initLog();
+HVector* initLog();
 
-void  writeLog(Vector* log);
-void exportLog(Vector* log);
-void   readLog(Vector* log);
+void  writeLog(HVector* log);
+void exportLog(HVector* log);
+void   readLog(HVector* log);
 
-void sortLogVec(Vector* log, SORT_TYPES sortType, bool descending);
+void sortLogVec(HVector* log, SORT_TYPES sortType, bool descending);
 
-void printLog(Vector* log);
+void printLog(HVector* log);
 
-void clearLog(Vector* log);
+void clearLog(HVector* log);
 void clearLogFile();
 
 #endif

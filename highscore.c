@@ -1,4 +1,3 @@
-#include "tetris.h"
 #include "highscore.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -34,22 +33,22 @@ static const uint8_t XOR_KEY[] = {
 
 
 
-static void freeLogRow(void *logRow);
+static void freeLogRow(LogRow* logRow);
 
-static uint64_t strToUInt(const char *str);
+static uint64_t strToUInt(const char* str);
 
 static void tokenizeLine(char* restrict seg, size_t segSize, const char* restrict line, int* linePos);
 
-static void formatLogRow(char* to, size_t toSize, Vector* log, int ind);
+static void formatLogRow(char* to, size_t toSize, HVector* log, int ind);
 
 static void xorStr(char* str, int* keyPos);
 
 
 
-static void freeLogRow(void* logRow) {
+static void freeLogRow(LogRow* logRow) {
     if (!logRow) return;
 
-    free((char*)( (LogRow*)(logRow) )->name);
+    free((char*)logRow->name);
     free(logRow);
 }
 
@@ -91,7 +90,7 @@ static void tokenizeLine(char* restrict seg, size_t segSize, const char* restric
 
 
 
-static void formatLogRow(char* to, size_t toSize, Vector* log, int ind) {
+static void formatLogRow(char* to, size_t toSize, HVector* log, int ind) {
     LogRow* row = log->arr[ind];
 
     uint8_t padding = LINE_NUM_PAD - (uint8_t)log10(ind + 1);
@@ -123,14 +122,14 @@ static void xorStr(char* str, int* keyPos) {
 
 
 
-Vector* initLog() {
-    Vector* log = crtvec(0, DTYPE_STRUCT, freeLogRow);
+HVector* initLog() {
+    HVector* log = crthvec(0, HVEC_TYPE_STRUCT, (void (*)(void*))freeLogRow);
     return log;
 }
 
 
 
-void writeLog(Vector* log) {
+void writeLog(HVector* log) {
     // We first save a temporary copy of the current data,
     // then overwrite the original file with new data,
     // to prevent potential losses.
@@ -195,7 +194,7 @@ void writeLog(Vector* log) {
     remove(TEMP_FNM);
 }
 
-void exportLog(Vector* log) {
+void exportLog(HVector* log) {
     FILE *f = fopen(EXTRN_LOG_FNM, "wb");
     if (!f) return;
 
@@ -205,12 +204,14 @@ void exportLog(Vector* log) {
 
         formatLogRow(to, alloc, log, i);
         fputs(to, f);
+
+        free(to);
     }
 
     fclose(f);
 }
 
-void readLog(Vector* log) {
+void readLog(HVector* log) {
     // We first decrypt the data, then transfer it to a temporary file.
     // This allows the usage of fgets() due to the presence of newlines now separating each log.
 
@@ -279,8 +280,10 @@ void readLog(Vector* log) {
         tokenizeLine(seg, segSize, line, &linePos);
         row->tetrisCount = strToUInt(seg);
 
-        vecpush(log, row);
+        hvecpush(log, row);
     }
+
+    free(txt);
 
     fclose(tmp);
     remove(TEMP_FNM);
@@ -288,7 +291,7 @@ void readLog(Vector* log) {
 
 
 
-void sortLogVec(Vector* log, SORT_TYPES sortType, bool descending) {
+void sortLogVec(HVector* log, SORT_TYPES sortType, bool descending) {
     for (int i = 0; i < log->len; i++) {
         if (!log->arr[i]) continue;
 
@@ -324,7 +327,7 @@ void sortLogVec(Vector* log, SORT_TYPES sortType, bool descending) {
 
 
 
-void printLog(Vector* log) {
+void printLog(HVector* log) {
     clearterm();
 
     for (int i = 0; i < log->len; i++) {
@@ -333,6 +336,8 @@ void printLog(Vector* log) {
 
         formatLogRow(to, alloc, log, i);
         fputs(to, stdout);
+
+        free(to);
     }
 
     fflush(stdout);
@@ -340,9 +345,9 @@ void printLog(Vector* log) {
 
 
 
-void clearLog(Vector* log) {
+void clearLog(HVector* log) {
     for (int i = 0, vecLen = log->len; i < vecLen; i++) {
-        vecpop(log);
+        hvecpop(log);
     }
 }
 

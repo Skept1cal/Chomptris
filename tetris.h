@@ -33,7 +33,7 @@
 #define MENU_PADDING     14 // How many columns a button or its input field should push text to the right
 
 // Appears at top of main menu
-#define VERSION_STR       "V1.6.6"
+#define VERSION_STR       "V1.7.0"
 #define MENU_TITLE        ("CHOMPTRIS " VERSION_STR)
 
 // Labels for the buttons in main menu
@@ -74,6 +74,14 @@
 
 #ifdef _WIN32
     #define _CRT_RAND_S
+#endif
+
+#ifndef INCLUDE_HVEC
+#define INCLUDE_HVEC
+#endif
+
+#ifndef INCLUDE_SVEC
+#define INCLUDE_SVEC
 #endif
 
 #include "vector/vector.h"
@@ -192,7 +200,7 @@ typedef enum TOGGLE_LOG_BTN_CYCLES {
 } TOGGLE_LOG_BTN_CYCLES;
 
 typedef struct Button {
-    Vector*     chars;             // Representation of the input-field
+    SVector*    chars;             // Representation of the input-field
     uint8_t     cycle;             // Used for buttons of type BVTYPE_CYCLE
     uint8_t     cycleLen;          // How many cycles there are
     uint8_t     id;
@@ -246,7 +254,7 @@ typedef struct Player {
 
     bool     firstLevel;       // If this is true, the threshold for the first level up is shifted
 
-    Vector*  log;
+    HVector* log;
     bool     logOpen;          // Whether the player is currently looking at the highscore logs
     bool     logUnsorted;      // Whether there have been any modifications to the log since it was last sorted
 
@@ -271,7 +279,7 @@ typedef struct Player {
 #define MIN(n1, n2) (n1 < n2 ? n1 : n2)
 #define MAX(n1, n2) (n1 > n2 ? n1 : n2)
 
-static inline void readInput(Player* player, Vector* ARENA, uint8_t* c);
+static inline void readInput(Player* player, HVector* ARENA, uint8_t* c);
 
 static inline bool strmtch(const char* str1, const char* str2);
 static inline void writeField(char** buff, MARKERS marker, const char* str);
@@ -310,19 +318,19 @@ static inline void flushstdin(uint8_t* c);
     void setWinHandler();
 #endif
 
-Vector* createArena();
+HVector* createArena();
 void     initPlayer(Player* player);
-void          reset(Player* player, Vector* ARENA);
+void          reset(Player* player, HVector* ARENA);
 void     freePlayer(Player* player);
-void           quit(Player* player, Vector* ARENA);
+void           quit(Player* player, HVector* ARENA);
 
-void renderGame(Player* player, Vector* ARENA);
-void   gameOver(Player* player, Vector* ARENA, struct timespec* animationTimeout);
+void renderGame(Player* player, HVector* ARENA);
+void   gameOver(Player* player, HVector* ARENA, struct timespec* animationTimeout);
 void    levelUp(struct timespec* animationTimeout);
 
 void togglePause(Player* player);
-void  toggleHelp(Player* player, Vector* ARENA);
-void    goToMenu(Player* player, Vector* ARENA);
+void  toggleHelp(Player* player, HVector* ARENA);
+void    goToMenu(Player* player, HVector* ARENA);
 
 // O and J pieces don't have left-padding in their matrix representations
 #define PIECE_LEFT_PADDING(type) (type != PIECE_O && type != PIECE_J)
@@ -337,33 +345,33 @@ Piece   createPiece();
 void      initPiece(Piece* p);
 void setPieceToNull(Piece* p);
 
-bool pieceCollides(Piece* p, Vector* ARENA);
+bool pieceCollides(Piece* p, HVector* ARENA);
 
-bool  canMoveDown(Piece* p, Vector* ARENA);
-bool canMoveRight(Piece* p, Vector* ARENA);
-bool  canMoveLeft(Piece* p, Vector* ARENA);
-static inline void  moveDown(Piece* p, Vector* ARENA);
-static inline void moveRight(Piece* p, Vector* ARENA);
-static inline void  moveLeft(Piece* p, Vector* ARENA);
+bool  canMoveDown(Piece* p, HVector* ARENA);
+bool canMoveRight(Piece* p, HVector* ARENA);
+bool  canMoveLeft(Piece* p, HVector* ARENA);
+static inline void  moveDown(Piece* p, HVector* ARENA);
+static inline void moveRight(Piece* p, HVector* ARENA);
+static inline void  moveLeft(Piece* p, HVector* ARENA);
 
 void   transpose(Piece *p);
 void reverseRows(Piece *p);
 void       rotCW(Piece *p);
 void      rotCCW(Piece *p);
 
-bool wallKick(Piece *p, Vector *ARENA);
+bool wallKick(Piece *p, HVector *ARENA);
 
-bool  canRotateCW(Piece* p, Vector* ARENA);
-bool canRotateCCW(Piece* p, Vector* ARENA);
-void     rotateCW(Piece* p, Vector* ARENA);
-void    rotateCCW(Piece* p, Vector* ARENA);
+bool  canRotateCW(Piece* p, HVector* ARENA);
+bool canRotateCCW(Piece* p, HVector* ARENA);
+void     rotateCW(Piece* p, HVector* ARENA);
+void    rotateCCW(Piece* p, HVector* ARENA);
 
 void swapHeldPiece(Player* player);
 
-void engrainPiece(Piece* p, Vector* ARENA);
+void engrainPiece(Piece* p, HVector* ARENA);
 
-bool markLines(Vector* ARENA);
-int clearLines(Vector* ARENA);
+bool markLines(HVector* ARENA);
+int clearLines(HVector* ARENA);
 
 void renderMenu(Player* player);
 
@@ -379,8 +387,8 @@ void    writeCharToInput(Player* player,    char  c);
 void     writeNumToInput(Player* player, uint8_t nc);
 void removeCharFromInput(Player* player);
 
-uint32_t uint8VecToInt(Vector* vec);
-void       capUint8Vec(Vector* vec, uint8_t cap);
+uint32_t uint8SVecToInt(SVector* vec);
+void       capUint8SVec(SVector* vec, uint8_t cap);
 
 void updateFromInput(Player* player);
 
@@ -392,9 +400,9 @@ void   viewLogBtnPressed(void* player);
 void exportLogBtnPressed(void* player);
 void  clearLogBtnPressed(void* player);
 
-void    upPressed(Player* player, Vector* ARENA);
-void  downPressed(Player* player, Vector* ARENA);
-void rightPressed(Player* player, Vector* ARENA);
-void  leftPressed(Player* player, Vector* ARENA);
+void    upPressed(Player* player, HVector* ARENA);
+void  downPressed(Player* player, HVector* ARENA);
+void rightPressed(Player* player, HVector* ARENA);
+void  leftPressed(Player* player, HVector* ARENA);
 
 #endif

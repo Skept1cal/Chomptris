@@ -1,362 +1,365 @@
+#include "vector.h"
 #include <stdlib.h>
 #include <string.h>
 
-#include "vector.h"
-
-//#include <stdio.h>
 
 
-
-/*static void logvec(Vector* vec) {
-    printf("\nVector:");
-    for (int i = 0; i < vec->max; i++) {
-        printf("\nindex %i: 0x%x", i, vec->arr[i]);
-        if (vec->arr[i]) printf("; %lf", *(double*)vec->arr[i]);
-        else printf("; NULL");
-    }
-    printf("\n");
-}*/
+#define MIN_VECTOR_SIZE 2
 
 
 
-#define DTYPES_BEGIN (DTYPE_NORMAL)
-#define DTYPES_END   (DTYPE_STRUCT + 1)
-static const DTYPE_T DTYPES[] = {[DTYPES_BEGIN]=DTYPE_NORMAL, DTYPE_VECTOR, DTYPE_STRUCT};
+#ifdef INCLUDE_HVEC
 
-Vector* crtvec(size_t size, unsigned char type, void (*freefnc)(void*)) {
-    int validmtype = 0;
-    if (type) {
-        for (int i = DTYPES_BEGIN; i < DTYPES_END; i++) {
-            if (type == DTYPES[i]) {
-                validmtype = 1;
-                break;
-            }
-        }
-    }
-    if (!validmtype) return NULL;
+#define HVEC_TYPES_ARR_BEGIN HVEC_TYPE_NORMAL
+#define HVEC_TYPES_ARR_END   HVEC_TYPE_SVECTOR
+const HVEC_TYPES HVEC_TYPES_ARR[] = {
+    [HVEC_TYPE_NORMAL]  = HVEC_TYPE_NORMAL,
+    [HVEC_TYPE_STRUCT]  = HVEC_TYPE_STRUCT,
+    [HVEC_TYPE_HVECTOR] = HVEC_TYPE_HVECTOR,
+    [HVEC_TYPE_SVECTOR] = HVEC_TYPE_SVECTOR
+};
 
-    Vector* vec = malloc(sizeof(Vector));
-    if (!vec) return NULL;
 
-    size_t allocated = (size > 0) ? size : 2;
 
-    vec->arr = calloc(allocated, sizeof(void*));
-    if (!vec->arr) {
-        free(vec);
+HVector *crthvec(size_t size, HVEC_TYPES type, void (*freefnc)(void *)) {
+    if (
+        !type                                  ||
+        type < HVEC_TYPES_ARR_BEGIN            ||
+        type > HVEC_TYPES_ARR_END              ||
+        (type == HVEC_TYPE_STRUCT && !freefnc)
+    ) return NULL;
+
+    HVector* hvec = malloc(sizeof(HVector));
+    if (!hvec) return NULL;
+
+    hvec->arr = calloc(MAX(size, MIN_VECTOR_SIZE), sizeof(void*));
+    if (!hvec->arr) {
+        free(hvec);
         return NULL;
     }
 
-    vec->max = allocated;
-    vec->len = 0;
+    hvec->max       = MAX(size, MIN_VECTOR_SIZE);
+    hvec->len       = 0;
+    hvec->type      = type;
+    hvec->freestrct = freefnc;
 
-    vec->mtype = type;
-    vec->stype = TYPE_NULL;
-
-    vec->freestrct = freefnc;
-
-    return vec;
-}
-
-Vector* crtvecalt(size_t size, unsigned char mtype, unsigned char stype, void (*freefnc)(void*)) {
-    Vector* vec = crtvec(size, mtype, freefnc);
-    if (!vec) return NULL;
-    vec->stype = stype;
-    return vec;
+    return hvec;
 }
 
 
 
-void freevec(Vector* vec) {
-    if (!vec || !vec->arr) return;
+int freehvec(HVector *hvec) {
+    if (!hvec) return 1;
 
-    switch (vec->mtype) {
-        case DTYPE_STRUCT: for (int i = 0; i < vec->len; i++) vec->freestrct(vec->arr[i]); break;
-        case DTYPE_VECTOR: for (int i = 0; i < vec->len; i++)        freevec(vec->arr[i]); break;
-                  default: for (int i = 0; i < vec->len; i++)           free(vec->arr[i]);
-    }
-
-    free(vec->arr);
-    free(vec);
-}
-
-void* vecrecalloc(Vector* vec) {
-    void** temp = realloc(vec->arr, vec->max * 2 * sizeof(void*));
-    if (!temp) return NULL;
-
-    vec->max *= 2;
-    memset(temp + vec->len, 0, (vec->max - vec->len) * sizeof(void*));
-    vec->arr = temp;
-
-    return vec->arr;
-}
-
-void vecfreeind(Vector* vec, size_t ind) {
-    if (!vec || !vec->arr || ind >= vec->len || !vec->arr[ind]) return;
-
-    switch (vec->mtype) {
-        case DTYPE_STRUCT: vec->freestrct(vec->arr[ind]); break;
-        case DTYPE_VECTOR:        freevec(vec->arr[ind]); break;
-                  default:           free(vec->arr[ind]);
-    }
-
-    vec->arr[ind] = NULL;
-}
-
-
-
-int vecrmv(Vector* vec, size_t ind) {
-    if (!vec || !vec->arr || ind >= vec->len) return 1;
-
-    vecfreeind(vec, ind);
-
-    // Must subtract 1 for size as `vec->len - ind` would include the index itself, which we don't want to move
-    if (ind < vec->len - 1) memmove(vec->arr + ind, vec->arr + ind+1, (vec->len - ind - 1) * sizeof(void*));
-
-    // We must set the last element to NULL as memmove() duplicated it
-    // We don't free it as it'd potentially free both the last and second to last elements
-    // 'vec->len' is yet to be decremented, so we decrement and use that value to get rid of the duplicated last element
-    vec->arr[--vec->len] = NULL;
-
-    return 0;
-}
-
-int vecpop(Vector* vec) {
-    if (!vec) return 1;
-    return vecrmv(vec, vec->len - 1);
-}
-
-
-
-void* vecswap(Vector* vec, size_t ind, void* item) {
-    if (!vec || ind > vec->len) return NULL;
-
-    vecfreeind(vec, ind);
-    vec->arr[ind] = item;
-    
-    return vec->arr[ind];
-}
-
-void* vecinsrt(Vector* vec, size_t ind, void* item) {
-    if (!vec || ind > vec->len || !item) return NULL;
-
-    if (vec->len == vec->max) {
-        if (!vecrecalloc(vec)) return NULL;
-    }
-
-    // Shift everything to the right of 'ind' right by 1
-    memmove(vec->arr + ind+1, vec->arr + ind, (vec->len - ind) * sizeof(void*));
-
-    // Must do this here as vecswap() would free both the 'ind'-th and 'ind + 1'-th elements and cause a double-free later
-    vec->arr[ind] = NULL;
-
-    if (!vecswap(vec, ind, item)) return NULL;
-    vec->len++;
-
-    return vec->arr[ind];
-}
-
-void* vecinsrtsf(Vector* vec, size_t ind, void* item) {
-    if (!vec || ind > vec->len || !item)  return NULL;
-
-    if (!vec->arr[ind] && ind < vec->len) return  vecswap(vec, ind, item);
-    if (ind == vec->len)                  return  vecpush(vec, item);
-    else                                  return vecinsrt(vec, ind, item);
-}
-
-void* vecpush(Vector* vec, void* item) {
-    if (!vec || !vec->arr || !item) return NULL;
-
-    if (vec->len == vec->max) {
-        if (!vecrecalloc(vec)) return NULL;
-    }
-
-    if (!vecswap(vec, vec->len, item)) return NULL;
-
-    return vec->arr[vec->len++];
-}
-
-// Testing
-/*
-int main() {
-    size_t vecSize = 10;
-
-    Vector* vec = crtvec(vecSize, DTYPE_VECTOR, NULL, NULL);
-
-    for (size_t i = 0; i < vecSize; i++) {
-        Vector* subvec = crtvec(vecSize, DTYPE_VECTOR, NULL, NULL);
-        
-        for (size_t j = 0; j < vecSize; j++) {
-            Vector *subsubvec = crtvec(vecSize, DTYPE_NORMAL, NULL, NULL);
-
-            for (size_t k = 0; k < vecSize; k++) {
-                int* num = malloc(sizeof(int));
-                *num = k;
-                vecpush(subsubvec, num);
+    if (hvec->arr) {
+        switch (hvec->type) {
+            case HVEC_TYPE_STRUCT: {
+                for (int i = 0; i < hvec->len; i++) {
+                    hvec->freestrct(hvec->arr[i]);
+                    hvec->arr[i] = NULL;
+                }
+                break;
             }
-
-            vecpush(subvec, subsubvec);
-        }
-
-        vecpush(vec, subvec);
-    }
-
-    printf("\nVector:");
-    for (size_t i = 0; i < vecSize; i++) {
-        printf("\n\tSubvector %i:", (int)i);
-        for (size_t j = 0; j < vecSize; j++) {
-            printf("\n\t\tSubsubvector %i:\n\t\t\t", (int)j);
-            for (size_t k = 0; k < vecSize; k++) {
-                printf("%i%s",
-                        *(int*)( (Vector*)( (Vector*)vec->arr[i] )->arr[j] )->arr[k],
-                        (k < vecSize - 1) ? ", " : "");
+            case HVEC_TYPE_HVECTOR: {
+                for (int i = 0; i < hvec->len; i++) {
+                    freehvec(hvec->arr[i]);
+                    hvec->arr[i] = NULL;
+                }
+                break;
+            }
+            case HVEC_TYPE_SVECTOR: {
+                #ifndef INCLUDE_SVEC
+                return 1;
+                #else
+                for (int i = 0; i < hvec->len; i++) {
+                    freesvec(hvec->arr[i]);
+                    hvec->arr[i] = NULL;
+                }
+                break;
+                #endif
+            }
+            default: {
+                for (int i = 0; i < hvec->len; i++) {
+                    free(hvec->arr[i]);
+                    hvec->arr[i] = NULL;
+                }
             }
         }
-    }
-    printf("\n");
 
-    freevec(vec);
-
-    return 0;
-}*/
-/*
-Vector* crtndimvec(unsigned int dims, unsigned int dimSize) {
-    Vector* vec = crtvec(dimSize, (dims > 1) ? DTYPE_VECTOR : DTYPE_NORMAL, NULL, NULL);
-
-    for (int i = 0; i < dimSize; i++) {
-        if (dims > 1) vecpush(vec, crtndimvec(dims - 1, dimSize));
-        else {
-            int* num = malloc(sizeof(int));
-            *num = i;
-            vecpush(vec, num);
-        }
+        free(hvec->arr);
+        hvec->arr = NULL;
     }
 
-    return vec;
-}
-
-void printndimvec(Vector* vec, unsigned int currdepth) {
-    if (vec->mtype == DTYPE_VECTOR) {
-        for (int i = 0; i < vec->len; i++) {
-            printf("\n");
-            for (int j = 0; j <= currdepth; j++) printf("\t");
-
-            printf("Subvector %i:", i);
-            printndimvec((Vector*)vec->arr[i], currdepth + 1);
-        }
-    } else {
-        printf("\n");
-        for (int j = 0; j <= currdepth; j++) printf("\t");
-
-        for (int i = 0; i < vec->len; i++) {
-            printf(
-                "%i%s",
-                *(int*)vec->arr[i],
-                (i < vec->len - 1) ? ", " : ""
-            );
-        }
-    }
-}
-
-int main() {
-    Vector* ndimvec = crtndimvec(10, 7);
-
-    printf("\nVector:");
-    printndimvec(ndimvec, 0);
-    printf("\n");
-
-    freevec(ndimvec);
+    free(hvec);
 
     return 0;
 }
-*/
-/*
-int main() {
-    Vector* vec = crtvec(0, DTYPE_NORMAL, NULL);
 
-    for (int i = 0; i < 5; i++) {
-        int* num = malloc(sizeof(int));
-        *num = i;
-        vecpush(vec, num);
-    }
+int hvecrecalloc(HVector *hvec) {
+    if (!hvec || !hvec->arr) return 1;
 
-    for (int i = 0; i < vec->len; i++) {
-        printf("\n%i", *(int*)vec->arr[i]);
-    }
-    printf("\n");
+    void** temp = realloc(hvec->arr, hvec->max * 2 * sizeof(void*));
+    if (!temp) return 1;
 
-    vecrmv(vec, 1);
-    vecpop(vec);
+    hvec->arr  = temp;
+    hvec->max *= 2;
 
-
-
-    int* inserted = malloc(sizeof(int));
-    *inserted = 100;
-    vecpush(vec, inserted);
-
-    printf("\n\n\n");
-
-    int* insertedtwo = malloc(sizeof(int));
-    *insertedtwo = *inserted;
-    vecinsrtsf(vec, 1, insertedtwo);
-
-    int* insertedthree = malloc(sizeof(int));
-    *insertedthree = 99;
-    vecinsrtsf(vec, vec->len, insertedthree);
-
-    int* insertedfour = malloc(sizeof(int));
-    *insertedfour = 9999;
-    vecinsrtsf(vec, 2, insertedfour);
-
-    vecswap(vec, 2, NULL);
-
-    int* insertedfive = malloc(sizeof(int));
-    *insertedfive = 12345;
-    vecinsrtsf(vec, 2, insertedfive);
-
-
-
-    printf("\nMax: %zu", vec->max);
-    printf("\nLength: %zu\n", vec->len);
-
-    for (int i = 0; i < vec->len; i++) {
-        if (vec->arr[i]) printf("\n%i", *(int*)vec->arr[i]);
-        else             printf("\nNULL");
-    }
-    printf("\n");
-
-    freevec(vec);
+    memset(hvec->arr + (hvec->max - hvec->len), 0, (hvec->max - hvec->len) * sizeof(void*));
 
     return 0;
-}*/
+}
 
-/*int main() {
-    Vector* vec = crtvec(0, DTYPE_VECTOR, NULL);
+int hvecfreeind(HVector *hvec, size_t ind) {
+    if (!hvec || !hvec->arr || ind >= hvec->len || !hvec->arr[ind]) return 1;
 
-    for (int i = 0; i < 128; i++) {
-        Vector* subvec = crtvec(0, DTYPE_NORMAL, NULL);
-        for (int j = 1; j <= 128; j++) {
-            double* num = malloc(sizeof(double));
-            *num = j * j;
-            vecpush(subvec, num);
+    switch (hvec->type) {
+        case HVEC_TYPE_STRUCT: hvec->freestrct(hvec->arr[ind]); break;
+        case HVEC_TYPE_HVECTOR:       freehvec(hvec->arr[ind]); break;
+        case HVEC_TYPE_SVECTOR: {
+            #ifndef INCLUDE_SVEC
+            return 1;
+            #else
+            freesvec(hvec->arr[ind]);
+            break;
+            #endif
         }
-        vecpush(vec, subvec);
+        default:                          free(hvec->arr[ind]); break;
     }
+    hvec->arr[ind] = NULL;
 
-    printf("\nVector:");
-    for (int i = 0; i < vec->len; i++) {
-        printf("\n\tSubvector %i:", i);
-        printf("\n\t\t");
-        for (int j = 0; j < ((Vector*)vec->arr[i])->len; j++) {
-            printf(
-                "%lf%s",
-                *(double*)( (Vector*)vec->arr[i] )->arr[j],
-                (j < ((Vector*)vec->arr[i])->len - 1) ? ", " : ""
-            );
-        }
-    }
-    printf("\n");
-    printf("\nLength: %zu; Max: %zu\n", vec->len, vec->max);
-
-    freevec(vec);
     return 0;
-}*/
+}
+
+
+
+int hvecswap(HVector *hvec, size_t ind, void *item) {
+    if (!hvec || !hvec->arr || ind >= hvec->len) return 1;
+
+    hvecfreeind(hvec, ind);
+    hvec->arr[ind] = item;
+
+    return 0;
+}
+
+int hvecinsrt(HVector *hvec, size_t ind, void *item) {
+    if (!hvec || !hvec->arr || ind > hvec->len) return 1;
+
+    if (hvec->len == hvec->max) {
+        if (hvecrecalloc(hvec) != 0) return 1;
+    }
+
+    if (ind < hvec->len) memmove(hvec->arr + ind + 1, hvec->arr + ind, (hvec->len - ind) * sizeof(void*));
+    hvec->arr[ind] = item;
+
+    hvec->len++;
+
+    return 0;
+}
+
+int hvecinsrtsf(HVector *hvec, size_t ind, void *item) {
+    if (!hvec || !hvec->arr || ind > hvec->len) return 1;
+
+    if (ind < hvec->len) return hvecinsrt(hvec, ind, item);
+    else                 return  hvecpush(hvec, item);
+
+    return 0;
+}
+
+int hvecpush(HVector *hvec, void *item) {
+    if (!hvec || !hvec->arr) return 1;
+
+    if (hvec->len == hvec->max) {
+        if (hvecrecalloc(hvec) != 0) return 1;
+    }
+
+    hvec->arr[hvec->len++] = item;
+
+    return 0;
+}
+
+
+
+int hvecrmv(HVector *hvec, size_t ind) {
+    if (!hvec || !hvec->arr || ind >= hvec->len || hvec->len == 0) return 1;
+
+    hvecfreeind(hvec, ind);
+
+    // Must subtract an extra 1 from the number of elements to be moved,
+    // as otherwise we'd count the removed element as well.
+    memmove(hvec->arr + ind, hvec->arr + ind + 1, (hvec->len - ind - 1) * sizeof(void*));
+    hvec->arr[--hvec->len] = NULL;
+
+    return 0;
+}
+
+int hvecpop(HVector *hvec) {
+    if (!hvec || !hvec->arr || hvec->len == 0) return 1;
+
+    if (hvecfreeind(hvec, hvec->len - 1) != 0) return 1;
+    hvec->len--;
+
+    return 0;
+}
+
+#endif
+
+
+
+#ifdef INCLUDE_SVEC
+
+#define SVEC_TYPES_ARR_BEGIN SVEC_TYPE_NORMAL
+#define SVEC_TYPES_ARR_END   SVEC_TYPE_STRUCT
+const SVEC_TYPES SVEC_TYPES_ARR[] = {
+    [SVEC_TYPE_NORMAL] = SVEC_TYPE_NORMAL,
+    [SVEC_TYPE_STRUCT] = SVEC_TYPE_STRUCT,
+};
+
+#define SVEC_IND_START(svec, ind) ( ((char*)svec->arr) + (ind) * svec->elemSize )
+
+
+
+SVector *crtsvec(size_t size, size_t elemSize, SVEC_TYPES type, void (*freefnc)(void *)) {
+    if (
+        !type                                  ||
+        type < SVEC_TYPES_ARR_BEGIN            ||
+        type > SVEC_TYPES_ARR_END              ||
+        (type == SVEC_TYPE_STRUCT && !freefnc) ||
+        elemSize == 0
+    ) return NULL;
+
+    SVector* svec = malloc(sizeof(SVector));
+    if (!svec) return NULL;
+
+    svec->arr = calloc(MAX(size, MIN_VECTOR_SIZE), elemSize);
+    if (!svec->arr) {
+        free(svec);
+        return NULL;
+    }
+
+    svec->elemSize  = elemSize;
+    svec->max       = MAX(size, MIN_VECTOR_SIZE);
+    svec->len       = 0;
+    svec->type      = type;
+    svec->freestrct = freefnc;
+
+    return svec;
+}
+
+
+
+int freesvec(SVector *svec) {
+    if (!svec) return 1;
+
+    if (svec->arr) {
+        if (svec->type == SVEC_TYPE_STRUCT) {
+            for (int i = 0; i < svec->len; i++) {
+                svec->freestrct(SVEC_IND_START(svec, i));
+            }
+        }
+
+        free(svec->arr);
+        svec->arr = NULL;
+    }
+
+    free(svec);
+
+    return 0;
+}
+
+int svecrecalloc(SVector *svec) {
+    if (!svec || !svec->arr) return 1;
+
+    void* temp = realloc(svec->arr, svec->max * 2 * svec->elemSize);
+    if (!temp) return 1;
+
+    svec->arr  = temp;
+    svec->max *= 2;
+
+    memset(SVEC_IND_START(svec, svec->max - svec->len), 0, (svec->max - svec->len) * svec->elemSize);
+
+    return 0;
+}
+
+int svecfreeind(SVector *svec, size_t ind) {
+    if (!svec || !svec->arr || ind >= svec->len) return 1;
+
+    if (svec->type == SVEC_TYPE_STRUCT) {
+        svec->freestrct(SVEC_IND_START(svec, ind));
+        memset(SVEC_IND_START(svec, ind), 0, svec->elemSize);
+    }
+
+    return 0;
+}
+
+
+
+int svecswap(SVector *svec, size_t ind, void *item) {
+    if (!svec || !svec->arr || ind >= svec->len || !item) return 1;
+
+    svecfreeind(svec, ind);
+    memcpy(SVEC_IND_START(svec, ind), item, svec->elemSize);
+
+    return 0;
+}
+
+int svecinsrt(SVector *svec, size_t ind, void *item) {
+    if (!svec || !svec->arr || ind > svec->len || !item) return 1;
+
+    if (svec->len == svec->max) {
+        if (svecrecalloc(svec) != 0) return 1;
+    }
+
+    if (ind < svec->len) memmove(SVEC_IND_START(svec, ind + 1), SVEC_IND_START(svec, ind), (svec->len - ind) * svec->elemSize);
+    memcpy(SVEC_IND_START(svec, ind), item, svec->elemSize);
+
+    svec->len++;
+
+    return 0;
+}
+
+int svecinsrtsf(SVector *svec, size_t ind, void *item) {
+    if (!svec || !svec->arr || ind > svec->len || !item) return 1;
+
+    if (ind < svec->len) return svecinsrt(svec, ind, item);
+    else                 return  svecpush(svec, item);
+
+    return 0;
+}
+
+int svecpush(SVector *svec, void *item) {
+    if (!svec || !svec->arr || !item) return 1;
+
+    if (svec->len == svec->max) {
+        if (svecrecalloc(svec) != 0) return 1;
+    }
+
+    memcpy(SVEC_IND_START(svec, svec->len++), item, svec->elemSize);
+
+    return 0;
+}
+
+
+
+int svecrmv(SVector *svec, size_t ind) {
+    if (!svec || !svec->arr || ind >= svec->len || svec->len == 0) return 1;
+
+    svecfreeind(svec, ind);
+
+    // Must subtract an extra 1 from the number of elements to be moved,
+    // as otherwise we'd count the removed element as well.
+    memmove(SVEC_IND_START(svec, ind), SVEC_IND_START(svec, ind + 1), (svec->len - ind - 1) * svec->elemSize);
+    memset(SVEC_IND_START(svec, --svec->len), 0, svec->elemSize);
+
+    return 0;
+}
+
+int svecpop(SVector *svec) {
+    if (!svec || !svec->arr || svec->len == 0) return 1;
+
+    if (svecfreeind(svec, svec->len - 1) != 0) return 1;
+    svec->len--;
+
+    return 0;
+}
+
+#endif
