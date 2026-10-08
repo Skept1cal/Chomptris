@@ -276,8 +276,6 @@ int main(int argc, char** argv) {
             long tempNsec = framerate.tv_nsec; // We'll need to reset the framerate after suspension to always compensate for the target itself
             framerate.tv_nsec -= (long)diff;
 
-            printf("\r\nDiff: %lfms\r\n", ((double)diff) / 1e6);
-
             suspend(&framerate);
 
             framerate.tv_nsec = tempNsec;

@@ -33,7 +33,7 @@
 #define MENU_PADDING     14 // How many columns a button or its input field should push text to the right
 
 // Appears at top of main menu
-#define VERSION_STR       "V1.7.0"
+#define VERSION_STR       "V1.7.1"
 #define MENU_TITLE        ("CHOMPTRIS " VERSION_STR)
 
 // Labels for the buttons in main menu
@@ -276,8 +276,12 @@ typedef struct Player {
     abort();                                                           \
 } while (0)
 
-#define MIN(n1, n2) (n1 < n2 ? n1 : n2)
-#define MAX(n1, n2) (n1 > n2 ? n1 : n2)
+#ifndef MIN
+#define MIN(n1, n2) ((n1) < (n2) ? (n1) : (n2))
+#endif
+#ifndef MAX
+#define MAX(n1, n2) ((n1) > (n2) ? (n1) : (n2))
+#endif
 
 static inline void readInput(Player* player, HVector* ARENA, uint8_t* c);
 

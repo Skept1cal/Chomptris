@@ -7,8 +7,8 @@
 
 #include <stddef.h>
 
-#define MIN(n1, n2) (n1 < n2 ? n1 : n2)
-#define MAX(n1, n2) (n1 > n2 ? n1 : n2)
+#define MIN(n1, n2) ((n1) < (n2) ? (n1) : (n2))
+#define MAX(n1, n2) ((n1) > (n2) ? (n1) : (n2))
 
 #ifdef INCLUDE_HVEC
 
