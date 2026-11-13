@@ -1026,6 +1026,7 @@ void reset(Player* player, HVector* ARENA) {
     player->level             = player->startLevel;
     player->score             = 0;
     player->gameOver          = false;
+    player->tetrisCount       = 0;
 
     player->bagLen            = 0;
     regenBag(player);
@@ -1496,16 +1497,15 @@ static inline void moveLeft(Piece* p, HVector* ARENA) {
 
 void transpose(Piece* p) {
     for (int i = 0; i < p->MATR_SZ; i++) {
-        for (int j = 0; j < p->MATR_SZ; j++) {
-            // The left half of the diagonal (from top-left to bottom-right) will already be swapped, so we skip it
-            // We also skip 'j' being equal to 'i' as such fields are not affected
-            if (j > i) {
-                uint8_t temp = getPieceShapeField(p, i, j);
-                setPieceShapeField(p, i, j, getPieceShapeField(p, j, i));
-                setPieceShapeField(p, j, i, temp);
-            }
+        // The left half of the diagonal (from top-left to bottom-right) will already be swapped, so we skip it
+        // We also shift j by 1 as fields where j == i are not affected
+        for (int j = i + 1; j < p->MATR_SZ; j++) {
+            uint8_t temp = getPieceShapeField(p, i, j);
+            setPieceShapeField(p, i, j, getPieceShapeField(p, j, i));
+            setPieceShapeField(p, j, i, temp);
         }
     }
+    return;
 }
 
 void reverseRows(Piece* p) {
