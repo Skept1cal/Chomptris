@@ -700,6 +700,8 @@ void printHelpText() {
         "\r\n                     If it doesn't, pressing CTRL+H and/or ESC will fix it,"
         "\r\n                     though the latter (ESC) should only be used outside of runs due to what it does.\r\n"
 
+	"\r\n- CTRL+Q         Shortcut to exit the game.\r\n"
+
         "\r\n----- MECHANICS -----\r\n"
 
         "\r\n- Every tick, the current piece falls by 1 tile."
